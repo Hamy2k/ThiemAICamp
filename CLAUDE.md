@@ -6,3 +6,5 @@
 - Tu push len GitHub khi xong task 
 - Deploy len Vercel sau khi pass test 
 - Bao cao ket qua bang tieng Viet 
+
+@AGENTS.md
