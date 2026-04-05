@@ -73,6 +73,41 @@ class TestTemplateManager:
         tm.scaffold("saas", output)
         tm.scaffold("saas", output)  # Should not raise
 
+    def test_scaffold_creates_gitignore(self, tm, tmp_path):
+        output = str(tmp_path / "test")
+        tm.scaffold("saas", output)
+        gitignore = os.path.join(output, ".gitignore")
+        assert os.path.exists(gitignore)
+        with open(gitignore) as f:
+            content = f.read()
+        assert "node_modules/" in content
+        assert ".env" in content
+
+    def test_scaffold_saas_creates_package_json(self, tm, tmp_path):
+        import json
+        output = str(tmp_path / "saas")
+        tm.scaffold("saas", output, "My SaaS")
+        pkg_path = os.path.join(output, "package.json")
+        assert os.path.exists(pkg_path)
+        with open(pkg_path) as f:
+            pkg = json.load(f)
+        assert pkg["name"] == "my-saas"
+        assert "next" in pkg["dependencies"]
+
+    def test_scaffold_crud_creates_pyproject(self, tm, tmp_path):
+        output = str(tmp_path / "crud")
+        tm.scaffold("crud", output)
+        pyproject = os.path.join(output, "pyproject.toml")
+        assert os.path.exists(pyproject)
+        with open(pyproject) as f:
+            content = f.read()
+        assert "fastapi" in content
+
+    def test_scaffold_ai_tool_creates_pyproject(self, tm, tmp_path):
+        output = str(tmp_path / "ai")
+        tm.scaffold("ai_tool", output)
+        assert os.path.exists(os.path.join(output, "pyproject.toml"))
+
     def test_all_templates_have_base_files(self):
         for key, template in TEMPLATES.items():
             assert len(template.base_files) > 0, f"Template {key} has no base files"

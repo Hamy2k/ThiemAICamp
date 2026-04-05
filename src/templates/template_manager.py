@@ -364,16 +364,59 @@ class TemplateManager:
                     f.write(f"{var}=\n")
             created_files.append(".env.example")
 
-        # Tạo config file
+        # Tạo .gitignore
+        gitignore_path = os.path.join(output_dir, ".gitignore")
+        gitignore_lines = [
+            "node_modules/", "__pycache__/", "*.pyc", ".env", ".env.local",
+            "dist/", "build/", ".next/", "*.egg-info/", ".pytest_cache/",
+            "data/", ".DS_Store", "*.pem",
+        ]
+        with open(gitignore_path, "w") as f:
+            f.write("\n".join(gitignore_lines) + "\n")
+        created_files.append(".gitignore")
+
+        # Tạo package config based on primary framework
+        effective_name = project_name or template.name
+        slug = effective_name.lower().replace(" ", "-")
+        is_python_primary = template.tech_stack[0] in ("FastAPI", "Python")
+        is_node_primary = template.tech_stack[0] in ("Next.js", "React", "TypeScript")
+
+        if is_node_primary:
+            pkg_path = os.path.join(output_dir, "package.json")
+            pkg = {
+                "name": slug,
+                "version": "0.1.0",
+                "private": True,
+                "scripts": {"dev": "next dev", "build": "next build", "start": "next start"},
+                "dependencies": template.dependencies,
+            }
+            with open(pkg_path, "w") as f:
+                json.dump(pkg, f, indent=2)
+            created_files.append("package.json")
+
+        if is_python_primary or any(t in template.tech_stack for t in ["Python", "FastAPI"]):
+            pyproject_path = os.path.join(output_dir, "pyproject.toml")
+            py_deps = {k: v for k, v in template.dependencies.items()
+                       if k not in ("next", "tailwindcss", "stripe")}
+            deps = "\n".join(f'    "{k}",' for k in py_deps)
+            with open(pyproject_path, "w") as f:
+                f.write(
+                    f'[project]\nname = "{slug}"\n'
+                    f'version = "0.1.0"\n'
+                    f'dependencies = [\n{deps}\n]\n'
+                )
+            created_files.append("pyproject.toml")
+
+        # Tạo thiemaicamp config
         config_path = os.path.join(output_dir, "thiemaicamp.json")
-        config = {
+        cfg = {
             "template": template_key,
-            "name": project_name or template.name,
+            "name": effective_name,
             "tech_stack": template.tech_stack,
             "dependencies": template.dependencies,
         }
         with open(config_path, "w") as f:
-            json.dump(config, f, indent=2)
+            json.dump(cfg, f, indent=2)
         created_files.append("thiemaicamp.json")
 
         return {
