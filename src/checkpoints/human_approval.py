@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Callable
 
 from src.persistence.database import Database
+from src import config
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +43,15 @@ class ApprovalRequest:
     status: ApprovalStatus = ApprovalStatus.PENDING
     requested_at: str = field(default_factory=lambda: datetime.now().isoformat())
     responded_at: Optional[str] = None
-    reviewer: str = "Thiem"
+    reviewer: str = ""
     feedback: str = ""
-    timeout_seconds: int = 3600
+    timeout_seconds: int = 0
+
+    def __post_init__(self):
+        if not self.reviewer:
+            self.reviewer = config.DEFAULT_REVIEWER
+        if not self.timeout_seconds:
+            self.timeout_seconds = config.APPROVAL_TIMEOUT
 
     def approve(self, feedback: str = "") -> None:
         self.status = ApprovalStatus.APPROVED

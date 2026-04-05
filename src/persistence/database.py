@@ -15,9 +15,13 @@ from contextlib import contextmanager
 class Database:
     """Thread-safe SQLite persistence layer."""
 
-    def __init__(self, db_path: str = "./data/thiemaicamp.db"):
-        self.db_path = db_path
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    def __init__(self, db_path: str = None):
+        try:
+            from src import config
+            self.db_path = db_path or config.DB_PATH
+        except Exception:
+            self.db_path = db_path or "./data/thiemaicamp.db"
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._local = threading.local()
         self._init_schema()
 

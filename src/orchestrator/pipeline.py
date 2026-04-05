@@ -12,6 +12,7 @@ Flow: Plan > Approve > Dev (parallel) > Review > QA > Deploy
 7. Templates (scaffold nếu cần)
 """
 
+import json
 import uuid
 import asyncio
 import logging
@@ -20,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum
 
+from src import config
 from src.persistence.database import Database
 from src.memory.chroma_store import MemoryStore
 from src.engine.task_engine import TaskEngine, Project, Priority, Status
@@ -27,6 +29,10 @@ from src.agents.dev_team import DevTeam, AgentRole
 from src.agents.reviewer import ReviewPipeline
 from src.checkpoints.human_approval import HumanApprovalSystem, CheckpointType, ApprovalStatus
 from src.monitoring.langsmith_logger import LangSmithLogger
+from src.execution.file_ops import FileOperations
+from src.execution.sandbox import Sandbox
+from src.integrations.git_manager import GitManager
+from src.integrations.notifier import Notifier
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +77,7 @@ class Pipeline:
         db: Optional[Database] = None,
         memory: Optional[MemoryStore] = None,
         auto_approve: bool = False,
+        workspace_dir: str = ".",
     ):
         self.db = db or Database()
         self.memory = memory or MemoryStore()
@@ -79,6 +86,9 @@ class Pipeline:
         self.review_pipeline = ReviewPipeline()
         self.approval_system = HumanApprovalSystem(db=self.db)
         self.logger = LangSmithLogger(db=self.db)
+        self.notifier = Notifier(db=self.db, webhook_url=config.WEBHOOK_URL or None)
+        self.file_ops = FileOperations(workspace_dir)
+        self.sandbox = Sandbox(workspace_dir)
         self.auto_approve = auto_approve
         self.runs: dict[str, PipelineRun] = {}
 
@@ -171,30 +181,57 @@ class Pipeline:
 
                 run.results["approval"] = {"status": "approved", "feedback": result.feedback}
 
-            # ── Stage 3: DEVELOPMENT (parallel) ────────────────────
+            # ── Stage 3: DEVELOPMENT (parallel with file I/O) ──────
             run.stage = PipelineStage.DEVELOPMENT
             logger.info(f"[{run.id}] Stage: DEVELOPMENT")
+            self.notifier.pipeline_started(project_name, len(tasks))
 
+            # Build assignments per role
             assignments = {}
             for t in tasks:
                 role_str = t.get("role", "api")
                 role = role_map.get(role_str, AgentRole.API)
                 assignments[role] = t.get("description", t["title"])
 
-            dev_results = await self.dev_team.assign_parallel(assignments)
+            # Execute agents in parallel - each writes files + validates
+            dev_tasks = []
+            for role, desc in assignments.items():
+                agent = self.dev_team.get_agent(role)
+                dev_tasks.append(
+                    agent.execute_task_with_files(
+                        desc, self.file_ops, self.sandbox,
+                        existing_files=self.file_ops.list_files()[:20],
+                    )
+                )
 
+            raw_results = await asyncio.gather(*dev_tasks, return_exceptions=True)
+            dev_results = {}
+            for role, result in zip(assignments.keys(), raw_results):
+                dev_results[role] = result
+
+            # Process results
             run.results["development"] = {}
+            all_files_written = []
             for role, result in dev_results.items():
-                is_error = isinstance(result, str) and result.startswith("ERROR:")
-                run.results["development"][role.value] = {
-                    "status": "error" if is_error else "completed",
-                    "output_length": len(result),
-                    "preview": result[:300] if not is_error else result,
-                }
-                if is_error:
+                if isinstance(result, Exception):
+                    run.results["development"][role.value] = {
+                        "status": "error", "error": str(result),
+                    }
                     run.errors.append(f"Dev {role.value}: {result}")
+                    logger.error(f"[{run.id}] Dev {role.value} FAILED: {result}")
+                else:
+                    files = result.get("files_written", [])
+                    all_files_written.extend(files)
+                    run.results["development"][role.value] = {
+                        "status": "completed",
+                        "files_written": files,
+                        "validation": result.get("validation", {}),
+                        "output_length": len(result.get("output", "")),
+                    }
 
-            # Mark tasks completed
+            run.results["files_written"] = all_files_written
+
+            # Mark tasks completed/failed
             for task in milestone.tasks:
                 role_str = None
                 for t in tasks:
@@ -203,26 +240,51 @@ class Pipeline:
                         break
                 if role_str:
                     role = role_map.get(role_str, AgentRole.API)
-                    dev_output = dev_results.get(role, "")
-                    if not (isinstance(dev_output, str) and dev_output.startswith("ERROR:")):
+                    result = dev_results.get(role)
+                    if isinstance(result, Exception):
+                        self.task_engine.fail_task(task.id, str(result))
+                    elif isinstance(result, dict) and result.get("validation", {}).get("passed", True):
                         self.task_engine.complete_task(task.id)
+                    else:
+                        self.task_engine.fail_task(task.id, "Validation failed")
 
             # ── Stage 4: REVIEW ────────────────────────────────────
             run.stage = PipelineStage.REVIEW
             logger.info(f"[{run.id}] Stage: REVIEW")
 
             review_results = {}
-            for role, output in dev_results.items():
-                if isinstance(output, str) and not output.startswith("ERROR:"):
-                    try:
-                        review = await self.review_pipeline.run(
-                            output, filename=f"{role.value}_output",
-                            context=f"Project: {project_name}"
-                        )
-                        review_results[role.value] = review
-                    except Exception as e:
-                        logger.error(f"Review failed for {role.value}: {e}")
-                        review_results[role.value] = {"error": str(e)}
+            for role, result in dev_results.items():
+                if isinstance(result, Exception):
+                    continue
+                # Review each file written by agent
+                files = result.get("files_written", [])
+                output_text = result.get("output", "")
+                review_input = output_text
+                if files:
+                    # Read actual file contents for review
+                    parts = []
+                    for fp in files:
+                        try:
+                            parts.append(f"--- {fp} ---\n{self.file_ops.read_file(fp)}")
+                        except FileNotFoundError:
+                            pass
+                    if parts:
+                        review_input = "\n\n".join(parts)
+
+                try:
+                    review = await self.review_pipeline.run(
+                        review_input, filename=f"{role.value}_output",
+                        context=f"Project: {project_name}"
+                    )
+                    review_results[role.value] = review
+                    self.notifier.review_result(
+                        role.value,
+                        review.get("review", {}).get("score", 0),
+                        review.get("passed", False),
+                    )
+                except Exception as e:
+                    logger.error(f"Review failed for {role.value}: {e}")
+                    review_results[role.value] = {"error": str(e), "passed": False}
 
             run.results["review"] = review_results
 
@@ -242,11 +304,14 @@ class Pipeline:
                 logger.debug(f"Memory store failed (non-critical): {e}")
 
             logger.info(f"[{run.id}] Pipeline COMPLETED for {project_name}")
+            elapsed = (datetime.now() - datetime.fromisoformat(run.started_at)).total_seconds()
+            self.notifier.pipeline_completed(project_name, elapsed)
 
         except Exception as e:
             run.stage = PipelineStage.FAILED
             run.errors.append(str(e))
             logger.error(f"[{run.id}] Pipeline FAILED: {e}")
+            self.notifier.pipeline_failed(project_name, str(e))
             self.logger.end_tracking(metrics, error=str(e))
             raise
         else:
@@ -254,7 +319,6 @@ class Pipeline:
 
         # Persist run to DB
         try:
-            import json
             self.db.log_execution(
                 run_id=run.id, agent_role="pipeline", action="run_project",
                 input_data=json.dumps({"name": project_name, "tasks": len(tasks)}),
@@ -318,7 +382,3 @@ class Pipeline:
             ),
             "total_runs": len(self.runs),
         }
-
-
-# Need json import at module level for the memory store call
-import json

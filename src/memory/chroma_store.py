@@ -13,6 +13,7 @@ import chromadb
 from chromadb.config import Settings
 
 from src.utils import retry, ThiemAICampError
+from src import config
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +32,8 @@ class MemoryStore:
         "architecture_decisions": "Cac quyet dinh kien truc va ly do",
     }
 
-    def __init__(self, persist_dir: str = "./data/chromadb"):
-        self.persist_dir = persist_dir
+    def __init__(self, persist_dir: str = None):
+        self.persist_dir = persist_dir or config.CHROMADB_PATH
         try:
             self.client = chromadb.PersistentClient(
                 path=persist_dir,
@@ -72,7 +73,7 @@ class MemoryStore:
         existing = self._collections["code_patterns"].query(
             query_texts=[content], n_results=1
         )
-        if existing["distances"] and existing["distances"][0] and existing["distances"][0][0] < 0.05:
+        if existing["distances"] and existing["distances"][0] and existing["distances"][0][0] < config.MEMORY_DEDUP_THRESHOLD:
             logger.info(f"Duplicate pattern detected, skipping: {pattern_name}")
             return existing["ids"][0][0]
 

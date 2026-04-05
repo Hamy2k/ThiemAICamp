@@ -14,6 +14,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.utils import async_retry, AgentError
+from src import config
 
 logger = logging.getLogger(__name__)
 
@@ -124,12 +125,12 @@ Tra ve review theo format JSON (KHONG co text ngoai JSON):
 class ReviewAgent:
     """Agent review code trước khi merge."""
 
-    def __init__(self, model: str = "claude-sonnet-4-5-20250514", min_score: float = 7.0):
-        self.model = model
-        self.min_score = min_score
+    def __init__(self, model: str = "", min_score: float = 0):
+        self.model = model or config.LLM_MODEL
+        self.min_score = min_score or config.REVIEW_MIN_SCORE
 
     def get_llm(self) -> ChatAnthropic:
-        return ChatAnthropic(model=self.model, temperature=0)
+        return ChatAnthropic(model=self.model, temperature=config.LLM_TEMPERATURE)
 
     @async_retry(max_attempts=2, delay=1.0)
     async def review_code(self, code: str, filename: str = "unknown", context: str = "") -> ReviewResult:
@@ -226,13 +227,13 @@ Tra ve JSON (KHONG co text ngoai JSON):
 class QAAgent:
     """Agent chạy QA checks sau review."""
 
-    def __init__(self, model: str = "claude-sonnet-4-5-20250514"):
-        self.model = model
+    def __init__(self, model: str = ""):
+        self.model = model or config.LLM_MODEL
 
     @async_retry(max_attempts=2, delay=1.0)
     async def run_qa(self, code: str, test_requirements: str = "") -> QAResult:
         """Chạy QA analysis trên code."""
-        llm = ChatAnthropic(model=self.model, temperature=0)
+        llm = ChatAnthropic(model=self.model, temperature=config.LLM_TEMPERATURE)
         prompt = (
             f"Viet test cases va danh gia code:\n\n```\n{code}\n```\n\n"
             f"Yeu cau: {test_requirements or 'Tu xac dinh test cases phu hop'}"
@@ -267,7 +268,7 @@ class QAAgent:
 class ReviewPipeline:
     """Pipeline: Dev > Reviewer > QA."""
 
-    def __init__(self, model: str = "claude-sonnet-4-5-20250514", min_score: float = 7.0):
+    def __init__(self, model: str = "", min_score: float = 0):
         self.reviewer = ReviewAgent(model=model, min_score=min_score)
         self.qa = QAAgent(model=model)
 

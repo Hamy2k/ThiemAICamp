@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Callable
 
 from src.persistence.database import Database
+from src import config
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class AgentMetrics:
 class LangSmithLogger:
     """Logger tích hợp LangSmith + SQLite persistence."""
 
-    MAX_MEMORY_RECORDS = 1000  # Cap in-memory history
+    MAX_MEMORY_RECORDS = config.METRICS_MAX_MEMORY
 
     def __init__(
         self,
@@ -70,7 +71,7 @@ class LangSmithLogger:
         # Setup LangSmith
         if api_key:
             os.environ["LANGSMITH_API_KEY"] = api_key
-        os.environ.setdefault("LANGSMITH_PROJECT", project_name)
+        os.environ.setdefault("LANGSMITH_PROJECT", project_name or config.LANGSMITH_PROJECT)
         os.environ.setdefault("LANGSMITH_TRACING", "true")
 
         self._client = None

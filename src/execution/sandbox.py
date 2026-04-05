@@ -14,6 +14,7 @@ from typing import Optional
 from pathlib import Path
 
 from src.utils import ExecutionError
+from src import config
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +59,12 @@ class Sandbox:
     def __init__(
         self,
         workspace_dir: str = ".",
-        timeout: int = 30,
-        max_output_size: int = 50000,
+        timeout: int = 0,
+        max_output_size: int = 0,
     ):
         self.workspace = Path(workspace_dir).resolve()
-        self.timeout = timeout
-        self.max_output_size = max_output_size
+        self.timeout = timeout or config.SANDBOX_TIMEOUT
+        self.max_output_size = max_output_size or config.SANDBOX_MAX_OUTPUT
 
     def _check_safety(self, code: str) -> None:
         """Check for dangerous patterns."""

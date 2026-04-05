@@ -15,6 +15,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.utils import async_retry, AgentError
+from src import config
 
 logger = logging.getLogger(__name__)
 
@@ -60,17 +61,21 @@ class WorktreeInfo:
 @dataclass
 class DevAgent:
     role: AgentRole
-    model: str = "claude-sonnet-4-5-20250514"
+    model: str = ""
     worktree: Optional[WorktreeInfo] = None
     is_busy: bool = False
     current_task_id: Optional[str] = None
 
+    def __post_init__(self):
+        if not self.model:
+            self.model = config.LLM_MODEL
+
     def get_llm(self) -> ChatAnthropic:
-        return ChatAnthropic(model=self.model, temperature=0)
+        return ChatAnthropic(model=self.model, temperature=config.LLM_TEMPERATURE)
 
     @async_retry(max_attempts=2, delay=1.0)
     async def execute_task(self, task_description: str) -> str:
-        """Thực thi một task và trả về kết quả."""
+        """Thực thi một task và trả về kết quả (text only)."""
         self.is_busy = True
         try:
             llm = self.get_llm()
@@ -88,6 +93,107 @@ class DevAgent:
             raise AgentError(self.role.value, str(e), e)
         finally:
             self.is_busy = False
+
+    async def execute_task_with_files(
+        self,
+        task_description: str,
+        file_ops: "FileOperations",
+        sandbox: "Sandbox",
+        existing_files: Optional[list[str]] = None,
+    ) -> dict:
+        """Execute task: LLM generates code -> write files -> validate via sandbox.
+
+        Returns dict with: output, files_written, validation result.
+        """
+        from src.execution.file_ops import FileOperations
+        from src.execution.sandbox import Sandbox
+
+        self.is_busy = True
+        try:
+            # Step 1: Read existing files for context
+            context_parts = []
+            if existing_files:
+                for fp in existing_files:
+                    try:
+                        content = file_ops.read_file(fp)
+                        context_parts.append(f"--- {fp} ---\n{content}")
+                    except FileNotFoundError:
+                        pass
+
+            context = "\n\n".join(context_parts) if context_parts else "No existing files."
+
+            # Step 2: Ask LLM to generate code with file structure
+            llm = self.get_llm()
+            system_prompt = (
+                f"{AGENT_SYSTEM_PROMPTS[self.role]}\n\n"
+                "IMPORTANT: Return code in this format:\n"
+                "For EACH file, use:\n"
+                "FILE: path/to/file.py\n"
+                "```\ncode here\n```\n\n"
+                "You can return multiple files."
+            )
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(
+                    content=f"Task: {task_description}\n\n"
+                    f"Existing code:\n{context}"
+                ),
+            ]
+            response = await llm.ainvoke(messages)
+            raw_output = response.content
+
+            # Step 3: Parse file blocks from LLM output
+            files_written = []
+            parsed_files = self._parse_file_blocks(raw_output)
+
+            for filepath, code in parsed_files.items():
+                try:
+                    file_ops.write_file(filepath, code)
+                    files_written.append(filepath)
+                    logger.info(f"Agent {self.role.value} wrote: {filepath}")
+                except (PermissionError, OSError) as e:
+                    logger.warning(f"Failed to write {filepath}: {e}")
+
+            # Step 4: Validate Python files via sandbox
+            validation = {"passed": True, "errors": []}
+            for fp in files_written:
+                if fp.endswith(".py"):
+                    result = sandbox.run_lint(
+                        str(file_ops._validate_path(fp))
+                    )
+                    if not result.success:
+                        validation["passed"] = False
+                        validation["errors"].append({
+                            "file": fp,
+                            "error": result.stderr[:500],
+                        })
+
+            return {
+                "output": raw_output,
+                "files_written": files_written,
+                "files_parsed": len(parsed_files),
+                "validation": validation,
+            }
+
+        except Exception as e:
+            logger.error(f"Agent {self.role.value} execute_with_files failed: {e}")
+            raise AgentError(self.role.value, str(e), e)
+        finally:
+            self.is_busy = False
+
+    @staticmethod
+    def _parse_file_blocks(text: str) -> dict[str, str]:
+        """Parse FILE: path + code blocks from LLM output."""
+        import re
+        files = {}
+        # Match: FILE: some/path.py\n```[lang]\ncode\n```
+        pattern = r'FILE:\s*(.+?)\s*\n```[^\n]*\n(.*?)```'
+        for match in re.finditer(pattern, text, re.DOTALL):
+            filepath = match.group(1).strip()
+            code = match.group(2)
+            if filepath and code:
+                files[filepath] = code
+        return files
 
 
 def _run_git(args: list[str], cwd: str) -> subprocess.CompletedProcess:
@@ -161,11 +267,12 @@ class WorktreeManager:
 class DevTeam:
     """Đội ngũ 4 specialized agents chạy song song."""
 
-    def __init__(self, repo_path: str = ".", model: str = "claude-sonnet-4-5-20250514"):
+    def __init__(self, repo_path: str = ".", model: str = ""):
         self.repo_path = os.path.abspath(repo_path)
         self.worktree_manager = WorktreeManager(self.repo_path)
+        effective_model = model or config.LLM_MODEL
         self.agents: dict[AgentRole, DevAgent] = {
-            role: DevAgent(role=role, model=model)
+            role: DevAgent(role=role, model=effective_model)
             for role in AgentRole
         }
 
