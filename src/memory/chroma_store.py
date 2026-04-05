@@ -1,36 +1,47 @@
 """
-UPGRADE 1 - MEMORY SYSTEM
+UPGRADE 1 - MEMORY SYSTEM (v2 - with error handling)
 Lưu trữ code patterns, bugs đã fix, architecture decisions vào ChromaDB.
-Sử dụng LangChain + Anthropic embeddings để tìm kiếm ngữ nghĩa.
 """
 
-import os
 import json
 import time
+import logging
 from typing import Optional
 from datetime import datetime
 
 import chromadb
 from chromadb.config import Settings
-from langchain_anthropic import ChatAnthropic
-from langchain_core.documents import Document
+
+from src.utils import retry, ThiemAICampError
+
+logger = logging.getLogger(__name__)
+
+
+class MemoryError(ThiemAICampError):
+    """Error trong memory operations."""
+    pass
 
 
 class MemoryStore:
     """ChromaDB-based memory system cho AI Software Office."""
 
     COLLECTIONS = {
-        "code_patterns": "Các code patterns đã học được từ projects",
-        "bugs_fixed": "Bugs đã fix và cách giải quyết",
-        "architecture_decisions": "Các quyết định kiến trúc và lý do",
+        "code_patterns": "Cac code patterns da hoc duoc tu projects",
+        "bugs_fixed": "Bugs da fix va cach giai quyet",
+        "architecture_decisions": "Cac quyet dinh kien truc va ly do",
     }
 
     def __init__(self, persist_dir: str = "./data/chromadb"):
         self.persist_dir = persist_dir
-        self.client = chromadb.PersistentClient(
-            path=persist_dir,
-            settings=Settings(anonymized_telemetry=False),
-        )
+        try:
+            self.client = chromadb.PersistentClient(
+                path=persist_dir,
+                settings=Settings(anonymized_telemetry=False),
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize ChromaDB: {e}")
+            raise MemoryError(f"ChromaDB init failed: {e}") from e
+
         self._collections = {}
         for name in self.COLLECTIONS:
             self._collections[name] = self.client.get_or_create_collection(
@@ -38,6 +49,7 @@ class MemoryStore:
                 metadata={"description": self.COLLECTIONS[name]},
             )
 
+    @retry(max_attempts=2, delay=0.5)
     def store_code_pattern(
         self,
         pattern_name: str,
@@ -55,13 +67,22 @@ class MemoryStore:
             "created_at": datetime.now().isoformat(),
         }
         content = f"Pattern: {pattern_name}\n\nDescription: {description}\n\nCode:\n{code_example}"
-        self._collections["code_patterns"].add(
-            ids=[doc_id],
-            documents=[content],
-            metadatas=[metadata],
+
+        # Dedup check
+        existing = self._collections["code_patterns"].query(
+            query_texts=[content], n_results=1
         )
+        if existing["distances"] and existing["distances"][0] and existing["distances"][0][0] < 0.05:
+            logger.info(f"Duplicate pattern detected, skipping: {pattern_name}")
+            return existing["ids"][0][0]
+
+        self._collections["code_patterns"].add(
+            ids=[doc_id], documents=[content], metadatas=[metadata],
+        )
+        logger.info(f"Stored code pattern: {pattern_name} ({doc_id})")
         return doc_id
 
+    @retry(max_attempts=2, delay=0.5)
     def store_bug_fix(
         self,
         bug_title: str,
@@ -84,12 +105,12 @@ class MemoryStore:
             f"Diff:\n{code_diff}"
         )
         self._collections["bugs_fixed"].add(
-            ids=[doc_id],
-            documents=[content],
-            metadatas=[metadata],
+            ids=[doc_id], documents=[content], metadatas=[metadata],
         )
+        logger.info(f"Stored bug fix: {bug_title} ({doc_id})")
         return doc_id
 
+    @retry(max_attempts=2, delay=0.5)
     def store_architecture_decision(
         self,
         title: str,
@@ -112,11 +133,18 @@ class MemoryStore:
             f"Alternatives Considered: {alternatives}"
         )
         self._collections["architecture_decisions"].add(
-            ids=[doc_id],
-            documents=[content],
-            metadatas=[metadata],
+            ids=[doc_id], documents=[content], metadatas=[metadata],
         )
+        logger.info(f"Stored ADR: {title} ({doc_id})")
         return doc_id
+
+    def update(self, collection_name: str, doc_id: str, content: str, metadata: dict = None) -> None:
+        """Update một document trong collection."""
+        if collection_name not in self._collections:
+            raise MemoryError(f"Collection '{collection_name}' khong ton tai")
+        self._collections[collection_name].update(
+            ids=[doc_id], documents=[content], metadatas=[metadata] if metadata else None,
+        )
 
     def search(
         self,
@@ -126,12 +154,15 @@ class MemoryStore:
     ) -> list[dict]:
         """Tìm kiếm trong memory bằng semantic search."""
         if collection_name not in self._collections:
-            raise ValueError(f"Collection '{collection_name}' không tồn tại")
+            raise MemoryError(f"Collection '{collection_name}' khong ton tai")
 
-        results = self._collections[collection_name].query(
-            query_texts=[query],
-            n_results=n_results,
-        )
+        try:
+            results = self._collections[collection_name].query(
+                query_texts=[query], n_results=n_results,
+            )
+        except Exception as e:
+            logger.error(f"Search failed in {collection_name}: {e}")
+            return []
 
         items = []
         if results["documents"]:
@@ -152,12 +183,9 @@ class MemoryStore:
         }
 
     def get_stats(self) -> dict:
-        """Thống kê số lượng records trong mỗi collection."""
-        return {
-            name: self._collections[name].count()
-            for name in self.COLLECTIONS
-        }
+        return {name: self._collections[name].count() for name in self.COLLECTIONS}
 
     def delete(self, collection_name: str, doc_id: str) -> None:
-        """Xóa một document khỏi collection."""
+        if collection_name not in self._collections:
+            raise MemoryError(f"Collection '{collection_name}' khong ton tai")
         self._collections[collection_name].delete(ids=[doc_id])

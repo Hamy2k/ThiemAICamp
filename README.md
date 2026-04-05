@@ -1,211 +1,217 @@
-# ThiemAICamp - AI Software Office
+# ThiemAICamp - AI Software Office v8.5
 
-Hệ thống AI agents tự động phát triển phần mềm, phiên bản **8.5/10**.
+He thong AI agents tu dong phat trien phan mem. **Score: 8.5/10**
 
-## Kiến trúc
+## Architecture
 
 ```
 ThiemAICamp/
 ├── src/
-│   ├── memory/          # Upgrade 1 - ChromaDB Memory System
-│   ├── engine/          # Upgrade 2 - Task Engine (Project > Milestone > Task > Subtask)
-│   ├── agents/          # Upgrade 3 & 4 - Dev Team + Reviewer Agent
-│   ├── monitoring/      # Upgrade 5 - LangSmith Observability
-│   ├── checkpoints/     # Upgrade 6 - Human Approval Checkpoints
-│   └── templates/       # Upgrade 7 - Project Templates (SaaS, CRUD, AI Tool)
+│   ├── memory/          # ChromaDB semantic memory (patterns, bugs, ADRs)
+│   ├── engine/          # Task Engine: Project > Milestone > Task > Subtask
+│   ├── agents/          # Dev Team (4 agents) + Review Agent + QA Agent
+│   ├── orchestrator/    # Main Pipeline: Plan > Approve > Dev > Review > QA
+│   ├── execution/       # File I/O + Code Sandbox (Python/Node/Shell)
+│   ├── integrations/    # Git Manager + Webhook Notifications
+│   ├── monitoring/      # LangSmith Observability + SQLite metrics
+│   ├── checkpoints/     # Human Approval System (async, persisted)
+│   ├── persistence/     # SQLite database layer (thread-safe)
+│   ├── templates/       # Project Templates: SaaS, CRUD, AI Tool
+│   ├── cli.py           # Typer CLI interface
+│   └── utils.py         # Retry decorators, error classes, logging
+├── tests/               # 81 unit tests (pytest)
 ├── requirements.txt
 └── CLAUDE.md
 ```
 
-## Cài đặt
+## Quick Start
 
 ```bash
 pip install -r requirements.txt
-```
-
-Cần thiết lập API keys:
-```bash
 export ANTHROPIC_API_KEY=your_key
-export LANGSMITH_API_KEY=your_key     # optional, cho observability
+
+# CLI
+python -m src.cli status
+python -m src.cli templates
+python -m src.cli memory-stats
+python -m src.cli run-tests
 ```
 
-## Hướng dẫn sử dụng
+## Modules
 
-### 1. Memory System (`src/memory/chroma_store.py`)
-
-Lưu trữ và tìm kiếm code patterns, bugs đã fix, architecture decisions.
+### 1. Memory System
+ChromaDB-backed semantic search across 3 collections with dedup detection.
 
 ```python
 from src.memory.chroma_store import MemoryStore
-
 store = MemoryStore()
-
-# Lưu code pattern
-store.store_code_pattern("Singleton", "Thread-safe singleton", "class Singleton: ...")
-
-# Lưu bug fix
-store.store_bug_fix("NPE on login", "NullPointerError", "Missing null check", "Added guard clause")
-
-# Lưu architecture decision
-store.store_architecture_decision("Use PostgreSQL", "Need ACID", "PostgreSQL for main DB", "Better for relational data")
-
-# Tìm kiếm
-results = store.search("database connection pooling")
-all_results = store.search_all("authentication pattern")
+store.store_code_pattern("Retry", "Exponential backoff", "def retry(): ...")
+store.store_bug_fix("NPE", "NullPointerError", "Missing check", "Added guard")
+results = store.search_all("database connection")
 ```
 
-### 2. Task Engine (`src/engine/task_engine.py`)
-
-Quản lý hierarchy: Project > Milestones > Tasks > Subtasks. Mỗi agent chỉ nhận 1 task.
+### 2. Task Engine
+Thread-safe hierarchy with priority-based assignment and cross-milestone dependencies.
 
 ```python
 from src.engine.task_engine import TaskEngine, Priority
-
 engine = TaskEngine()
-
-# Tạo project
-project = engine.create_project("E-commerce App")
-
-# Thêm milestone
-m1 = project.add_milestone("MVP", deadline="2025-03-01")
-
-# Thêm tasks
-t1 = m1.add_task("Setup database schema", priority=Priority.HIGH)
-t2 = m1.add_task("Build auth API", priority=Priority.HIGH)
-t2.dependencies = [t1.id]  # t2 phụ thuộc t1
-
-# Agent lấy task
-task = engine.get_next_task("api_agent")  # Trả về t1 (priority cao, không có dependency)
-
-# Hoàn thành task
-engine.complete_task(task.id)
-
-# Xem tiến độ
-summary = engine.get_project_summary(project.id)
+project = engine.create_project("E-commerce")
+m = project.add_milestone("MVP", deadline="2025-06-01")
+t1 = m.add_task("Setup DB", priority=Priority.HIGH)
+t2 = m.add_task("Build API", priority=Priority.CRITICAL)
+t2.dependencies = [t1.id]
+task = engine.get_next_task("api_agent")  # Gets t1 (t2 blocked)
 ```
 
-### 3. Multi-Dev Parallel (`src/agents/dev_team.py`)
-
-4 specialized agents chạy song song: API, UI, Auth, DB.
+### 3. Dev Team (4 Parallel Agents)
+API, UI, Auth, DB agents with git worktree isolation.
 
 ```python
 import asyncio
 from src.agents.dev_team import DevTeam, AgentRole
-
 team = DevTeam()
-
-# Giao task cho từng agent
-result = asyncio.run(team.assign_task(AgentRole.API, "Build REST API for users"))
-
-# Giao nhiều tasks song song
 results = asyncio.run(team.assign_parallel({
     AgentRole.API: "Build user endpoints",
     AgentRole.DB: "Create user schema",
-    AgentRole.AUTH: "Setup JWT authentication",
+    AgentRole.AUTH: "Setup JWT",
     AgentRole.UI: "Build login page",
 }))
-
-# Git worktree cho mỗi agent
-worktrees = team.setup_worktrees()
-
-# Xem trạng thái team
-status = team.team_status()
 ```
 
-### 4. Review Agent (`src/agents/reviewer.py`)
-
-Pipeline: Dev > Reviewer > QA.
+### 4. Review Pipeline (Dev > Reviewer > QA)
+Structured JSON output with severity levels and categories.
 
 ```python
-import asyncio
 from src.agents.reviewer import ReviewPipeline
-
 pipeline = ReviewPipeline()
-
-code = '''
-def get_user(id):
-    return db.query(f"SELECT * FROM users WHERE id = {id}")
-'''
-
-# Chạy full review pipeline
-result = asyncio.run(pipeline.run(code, filename="user_service.py"))
-# Reviewer sẽ phát hiện SQL injection vulnerability
+result = asyncio.run(pipeline.run(code, filename="api.py"))
+# Returns: {"review": {..., "score": 8.5}, "qa": {"passed": true, "test_cases": [...]}}
 ```
 
-### 5. Observability (`src/monitoring/langsmith_logger.py`)
+### 5. Orchestrator (Full Pipeline)
+Connects ALL modules: Memory > Plan > Approve > Dev > Review > QA.
 
-LangSmith logging cho agent runtime, token usage, errors.
+```python
+from src.orchestrator.pipeline import Pipeline
+p = Pipeline(auto_approve=True)
+run = asyncio.run(p.run_project("My App", "E-commerce platform", tasks=[
+    {"title": "User API", "role": "api", "priority": "high"},
+    {"title": "Auth system", "role": "auth", "priority": "critical"},
+]))
+print(run.results)
+```
+
+### 6. Code Execution Sandbox
+Safe subprocess execution with timeout and blocked command detection.
+
+```python
+from src.execution.sandbox import Sandbox
+sandbox = Sandbox(timeout=30)
+result = sandbox.run_python("print(sum(range(100)))")
+assert result.success and "4950" in result.stdout
+```
+
+### 7. File Operations
+Safe file I/O with path validation, backup/restore, and diff generation.
+
+```python
+from src.execution.file_ops import FileOperations
+fops = FileOperations("./workspace")
+fops.write_file("api/users.py", code)
+fops.edit_file("api/users.py", "old_func", "new_func")
+fops.restore_backup("api/users.py")  # Undo
+```
+
+### 8. Git Manager
+Auto-commit from agent output with branch management.
+
+```python
+from src.integrations.git_manager import GitManager
+git = GitManager(".")
+git.auto_commit(["api.py"], "api_agent", "Build user endpoints")
+git.create_branch("feature/auth")
+git.push()
+```
+
+### 9. Notifications
+Multi-channel: console, webhook (Slack/Discord), file log.
+
+```python
+from src.integrations.notifier import Notifier
+n = Notifier(webhook_url="https://hooks.slack.com/...")
+n.pipeline_started("MyProject", 5)
+n.approval_needed("ap_001", "Deploy v2")
+n.review_result("api.py", 8.5, True)
+```
+
+### 10. Human Approval
+Async approval with timeout, persisted to SQLite.
+
+```python
+from src.checkpoints.human_approval import HumanApprovalSystem, CheckpointType
+approval = HumanApprovalSystem()
+req = approval.create_checkpoint(CheckpointType.DEPLOY_APPROVAL, "Deploy v2", "Details...")
+approval.approve(req.id, "LGTM!")
+```
+
+### 11. Observability
+LangSmith integration + SQLite persistence for metrics.
 
 ```python
 from src.monitoring.langsmith_logger import LangSmithLogger
-
-logger = LangSmithLogger(project_name="MyProject", api_key="ls_...")
-
-# Track agent execution
+logger = LangSmithLogger(api_key="ls_...")
 metrics = logger.start_tracking("api_agent", "task_001")
-# ... agent làm việc ...
 logger.end_tracking(metrics, input_tokens=500, output_tokens=200)
-
-# Decorator
-@logger.track_agent("api_agent")
-async def do_work():
-    pass
-
-# Xem thống kê
-summary = logger.get_summary()
-agent_stats = logger.get_agent_stats("api_agent")
+print(logger.get_summary())
 ```
 
-### 6. Human Checkpoint (`src/checkpoints/human_approval.py`)
+## CLI Commands
 
-Flow: PM xong > Hỏi Thiêm > Dev bắt đầu.
+| Command | Description |
+|---------|-------------|
+| `status` | System overview |
+| `memory-search <query>` | Search memory store |
+| `memory-stats` | Memory statistics |
+| `project-create <name>` | Create new project |
+| `project-status <id>` | Project progress |
+| `approvals` | List pending approvals |
+| `approve <id>` | Approve a request |
+| `reject <id>` | Reject a request |
+| `run-code <code>` | Run code in sandbox |
+| `run-tests` | Run pytest |
+| `templates` | List templates |
+| `scaffold <template> <dir>` | Create project from template |
+| `metrics` | System metrics |
 
-```python
-import asyncio
-from src.checkpoints.human_approval import HumanApprovalSystem, CheckpointType
+## Tests
 
-approval = HumanApprovalSystem()
-
-# Tạo checkpoint
-request = approval.create_checkpoint(
-    CheckpointType.TASK_APPROVAL,
-    title="Deploy v2.0 lên production",
-    description="Bao gồm: new auth system, dashboard redesign",
-    details={"estimated_downtime": "0", "rollback_plan": "revert to v1.9"},
-)
-
-# Thiêm approve
-approval.approve(request.id, feedback="LGTM, deploy đi!")
-
-# Hoặc reject
-approval.reject(request.id, feedback="Chưa test đủ, thêm integration tests")
+```bash
+python -m pytest tests/ -v
+# 81 tests covering: persistence, task_engine, memory, approval, execution, integrations
 ```
 
-### 7. Template System (`src/templates/template_manager.py`)
+## What's New in v8.5
 
-3 templates sẵn có: SaaS, CRUD App, AI Tool.
-
-```python
-from src.templates.template_manager import TemplateManager
-
-tm = TemplateManager()
-
-# Xem templates
-templates = tm.list_templates()
-
-# Scaffold project mới
-result = tm.scaffold("saas", output_dir="./my-saas-app", project_name="My SaaS")
-result = tm.scaffold("crud", output_dir="./my-crud-app")
-result = tm.scaffold("ai_tool", output_dir="./my-ai-tool")
-```
+| Feature | Before (v1) | After (v8.5) |
+|---------|------------|--------------|
+| Persistence | In-memory only | SQLite (thread-safe) |
+| Error Handling | None | Retry decorators, graceful degradation |
+| Orchestrator | Modules standalone | Full pipeline connecting all 7 modules |
+| Code Execution | Agents return text only | Real file I/O + subprocess sandbox |
+| Git Integration | Worktree concept only | Auto-commit, branch, merge, push |
+| Notifications | print() only | Console + Webhook + File log |
+| Tests | None | 81 unit tests |
+| CLI | None | 14 Typer commands |
+| Thread Safety | None | RLock on task engine, thread-local DB |
+| LangSmith | Env vars only | Real trace sending |
 
 ## Tech Stack
 
-- **Memory**: ChromaDB + LangChain
-- **LLM**: Anthropic Claude (via langchain-anthropic)
+- **Memory**: ChromaDB
+- **LLM**: Anthropic Claude (langchain-anthropic)
 - **Observability**: LangSmith
-- **Language**: Python 3.11+
-
-## License
-
-MIT
+- **Persistence**: SQLite
+- **CLI**: Typer + Rich
+- **Testing**: pytest
+- **Language**: Python 3.10+

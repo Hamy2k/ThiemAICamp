@@ -1,17 +1,22 @@
 """
-UPGRADE 3 - MULTI-DEV PARALLEL
+UPGRADE 3 - MULTI-DEV PARALLEL (v2 - with error handling, real file I/O)
 4 specialized agents: API, UI, Auth, DB chạy song song với git worktree.
 """
 
 import os
 import subprocess
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
+
+from src.utils import async_retry, AgentError
+
+logger = logging.getLogger(__name__)
 
 
 class AgentRole(str, Enum):
@@ -23,24 +28,24 @@ class AgentRole(str, Enum):
 
 AGENT_SYSTEM_PROMPTS = {
     AgentRole.API: (
-        "Bạn là API Developer Agent. Chuyên xây dựng REST/GraphQL APIs, "
-        "xử lý routing, middleware, validation, và error handling. "
-        "Viết code clean, có tests, và documentation đầy đủ."
+        "Ban la API Developer Agent. Chuyen xay dung REST/GraphQL APIs, "
+        "xu ly routing, middleware, validation, va error handling. "
+        "Viet code clean, co tests, va documentation day du."
     ),
     AgentRole.UI: (
-        "Bạn là UI Developer Agent. Chuyên xây dựng giao diện người dùng "
-        "với React/Next.js, responsive design, accessibility, và UX tốt. "
-        "Sử dụng component-based architecture."
+        "Ban la UI Developer Agent. Chuyen xay dung giao dien nguoi dung "
+        "voi React/Next.js, responsive design, accessibility, va UX tot. "
+        "Su dung component-based architecture."
     ),
     AgentRole.AUTH: (
-        "Bạn là Auth Developer Agent. Chuyên xây dựng hệ thống authentication "
-        "và authorization: JWT, OAuth2, RBAC, session management. "
-        "Bảo mật là ưu tiên hàng đầu."
+        "Ban la Auth Developer Agent. Chuyen xay dung he thong authentication "
+        "va authorization: JWT, OAuth2, RBAC, session management. "
+        "Bao mat la uu tien hang dau."
     ),
     AgentRole.DB: (
-        "Bạn là Database Developer Agent. Chuyên thiết kế schema, "
-        "viết migrations, tối ưu queries, indexing, và data modeling. "
-        "Đảm bảo data integrity và performance."
+        "Ban la Database Developer Agent. Chuyen thiet ke schema, "
+        "viet migrations, toi uu queries, indexing, va data modeling. "
+        "Dam bao data integrity va performance."
     ),
 }
 
@@ -63,6 +68,7 @@ class DevAgent:
     def get_llm(self) -> ChatAnthropic:
         return ChatAnthropic(model=self.model, temperature=0)
 
+    @async_retry(max_attempts=2, delay=1.0)
     async def execute_task(self, task_description: str) -> str:
         """Thực thi một task và trả về kết quả."""
         self.is_busy = True
@@ -70,19 +76,39 @@ class DevAgent:
             llm = self.get_llm()
             messages = [
                 SystemMessage(content=AGENT_SYSTEM_PROMPTS[self.role]),
-                HumanMessage(content=f"Task: {task_description}\n\nHãy thực hiện task này. Trả về code và giải thích."),
+                HumanMessage(
+                    content=f"Task: {task_description}\n\n"
+                    f"Hay thuc hien task nay. Tra ve code va giai thich."
+                ),
             ]
             response = await llm.ainvoke(messages)
             return response.content
+        except Exception as e:
+            logger.error(f"Agent {self.role.value} failed: {e}")
+            raise AgentError(self.role.value, str(e), e)
         finally:
             self.is_busy = False
+
+
+def _run_git(args: list[str], cwd: str) -> subprocess.CompletedProcess:
+    """Run a git command safely."""
+    result = subprocess.run(
+        ["git"] + args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0:
+        logger.warning(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+    return result
 
 
 class WorktreeManager:
     """Quản lý git worktrees cho các agents chạy song song."""
 
     def __init__(self, repo_path: str):
-        self.repo_path = repo_path
+        self.repo_path = os.path.abspath(repo_path)
         self.worktrees: dict[str, WorktreeInfo] = {}
 
     def create_worktree(self, agent_role: AgentRole, branch_name: str) -> WorktreeInfo:
@@ -90,58 +116,56 @@ class WorktreeManager:
         worktree_path = os.path.join(self.repo_path, f".worktrees/{agent_role.value}")
         os.makedirs(os.path.dirname(worktree_path), exist_ok=True)
 
-        # Tạo branch mới nếu chưa có
-        subprocess.run(
-            ["git", "branch", branch_name],
-            cwd=self.repo_path,
-            capture_output=True,
-        )
-        # Tạo worktree
-        subprocess.run(
-            ["git", "worktree", "add", worktree_path, branch_name],
-            cwd=self.repo_path,
-            capture_output=True,
-        )
+        _run_git(["branch", branch_name], self.repo_path)
+
+        result = _run_git(["worktree", "add", worktree_path, branch_name], self.repo_path)
+        if result.returncode != 0 and "already exists" not in result.stderr:
+            raise AgentError(agent_role.value, f"Failed to create worktree: {result.stderr}")
 
         info = WorktreeInfo(path=worktree_path, branch=branch_name, agent_role=agent_role)
         self.worktrees[agent_role.value] = info
+        logger.info(f"Created worktree for {agent_role.value} at {worktree_path}")
         return info
 
     def remove_worktree(self, agent_role: AgentRole) -> None:
-        """Xóa worktree của agent."""
         key = agent_role.value
         if key in self.worktrees:
-            subprocess.run(
-                ["git", "worktree", "remove", self.worktrees[key].path, "--force"],
-                cwd=self.repo_path,
-                capture_output=True,
-            )
+            _run_git(["worktree", "remove", self.worktrees[key].path, "--force"], self.repo_path)
             del self.worktrees[key]
+            logger.info(f"Removed worktree for {key}")
 
     def merge_worktree(self, agent_role: AgentRole, target_branch: str = "main") -> bool:
-        """Merge branch của agent vào target branch."""
         key = agent_role.value
         if key not in self.worktrees:
             return False
 
         info = self.worktrees[key]
-        result = subprocess.run(
-            ["git", "merge", info.branch, "--no-ff", "-m", f"Merge {agent_role.value} agent work"],
-            cwd=self.repo_path,
-            capture_output=True,
-            text=True,
+
+        # Check for uncommitted changes
+        status = _run_git(["status", "--porcelain"], info.path)
+        if status.stdout.strip():
+            logger.warning(f"Worktree {key} has uncommitted changes, auto-committing")
+            _run_git(["add", "-A"], info.path)
+            _run_git(["commit", "-m", f"Auto-commit from {key} agent"], info.path)
+
+        result = _run_git(
+            ["merge", info.branch, "--no-ff", "-m", f"Merge {key} agent work"],
+            self.repo_path,
         )
-        return result.returncode == 0
+        if result.returncode != 0:
+            logger.error(f"Merge failed for {key}: {result.stderr}")
+            return False
+        return True
 
 
 class DevTeam:
     """Đội ngũ 4 specialized agents chạy song song."""
 
-    def __init__(self, repo_path: str = "."):
+    def __init__(self, repo_path: str = ".", model: str = "claude-sonnet-4-5-20250514"):
         self.repo_path = os.path.abspath(repo_path)
         self.worktree_manager = WorktreeManager(self.repo_path)
         self.agents: dict[AgentRole, DevAgent] = {
-            role: DevAgent(role=role)
+            role: DevAgent(role=role, model=model)
             for role in AgentRole
         }
 
@@ -151,61 +175,66 @@ class DevTeam:
     def get_available_agents(self) -> list[DevAgent]:
         return [a for a in self.agents.values() if not a.is_busy]
 
-    async def assign_task(self, role: AgentRole, task_description: str, task_id: str) -> str:
+    async def assign_task(self, role: AgentRole, task_description: str, task_id: str = "") -> str:
         """Giao task cho một agent cụ thể."""
         agent = self.agents[role]
         if agent.is_busy:
-            raise RuntimeError(f"Agent {role.value} đang bận")
+            raise AgentError(role.value, f"Agent {role.value} dang ban")
 
         agent.current_task_id = task_id
-        result = await agent.execute_task(task_description)
-        agent.current_task_id = None
-        return result
+        try:
+            result = await agent.execute_task(task_description)
+            return result
+        finally:
+            agent.current_task_id = None
 
     async def assign_parallel(self, assignments: dict[AgentRole, str]) -> dict[AgentRole, str]:
         """Giao nhiều tasks cho nhiều agents chạy song song."""
-        tasks = []
-        for role, description in assignments.items():
-            tasks.append(self._run_agent(role, description))
+        tasks = {
+            role: self._run_agent(role, desc)
+            for role, desc in assignments.items()
+        }
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
 
         output = {}
-        for role, result in zip(assignments.keys(), results):
+        for role, result in zip(tasks.keys(), results):
             if isinstance(result, Exception):
+                logger.error(f"Agent {role.value} failed: {result}")
                 output[role] = f"ERROR: {result}"
             else:
                 output[role] = result
         return output
 
     async def _run_agent(self, role: AgentRole, description: str) -> str:
-        agent = self.agents[role]
-        return await agent.execute_task(description)
+        return await self.agents[role].execute_task(description)
 
     def setup_worktrees(self, base_branch: str = "dev") -> dict[AgentRole, WorktreeInfo]:
-        """Tạo worktrees cho tất cả agents."""
         result = {}
         for role in AgentRole:
-            branch = f"{base_branch}/{role.value}"
-            info = self.worktree_manager.create_worktree(role, branch)
-            self.agents[role].worktree = info
-            result[role] = info
+            try:
+                branch = f"{base_branch}/{role.value}"
+                info = self.worktree_manager.create_worktree(role, branch)
+                self.agents[role].worktree = info
+                result[role] = info
+            except Exception as e:
+                logger.error(f"Failed to create worktree for {role.value}: {e}")
         return result
 
     def merge_all(self, target_branch: str = "main") -> dict[AgentRole, bool]:
-        """Merge tất cả worktrees vào target branch."""
         return {
             role: self.worktree_manager.merge_worktree(role, target_branch)
             for role in AgentRole
         }
 
     def cleanup(self) -> None:
-        """Xóa tất cả worktrees."""
         for role in AgentRole:
-            self.worktree_manager.remove_worktree(role)
+            try:
+                self.worktree_manager.remove_worktree(role)
+            except Exception as e:
+                logger.error(f"Cleanup failed for {role.value}: {e}")
 
     def team_status(self) -> dict:
-        """Trạng thái của toàn bộ team."""
         return {
             role.value: {
                 "busy": agent.is_busy,
