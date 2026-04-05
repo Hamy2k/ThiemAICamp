@@ -24,16 +24,19 @@ var room_bounds: AABB = AABB(Vector3(-8, 0.5, -8), Vector3(16, 4, 16))
 var is_visible_to_player: bool = true
 var stealth_alpha: float = 1.0
 
-@onready var mesh: MeshInstance3D = $MeshInstance3D
-@onready var detection_area: Area3D = $DetectionArea
-@onready var wing_left: Node3D = $WingLeft if has_node("WingLeft") else null
-@onready var wing_right: Node3D = $WingRight if has_node("WingRight") else null
+var mesh: MeshInstance3D = null
+var wing_left: Node3D = null
+var wing_right: Node3D = null
 
 func _ready() -> void:
 	add_to_group("mosquitoes")
+	# Find child nodes safely
+	mesh = get_node_or_null("MeshInstance3D") as MeshInstance3D
+	wing_left = get_node_or_null("WingLeft")
+	wing_right = get_node_or_null("WingRight")
 	_apply_type_stats()
 	_pick_idle_target()
-	bob_offset = randf() * TAU  # Random phase
+	bob_offset = randf() * TAU
 
 func _physics_process(delta: float) -> void:
 	if state == State.DEAD:
