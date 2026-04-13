@@ -1,0 +1,19 @@
+{
+  "name": "Lắc Vận May",
+  "short_name": "Vận May",
+  "description": "App lắc vận may vui nhộn mỗi ngày",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ff6b9d",
+  "theme_color": "#ff6b9d",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
