@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#1a237e" />
+<title>Trump Dance Party 🕺</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body { height: 100%; overflow: hidden; touch-action: manipulation; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  body {
+    background: #000;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: env(safe-area-inset-top, 10px) 12px env(safe-area-inset-bottom, 10px);
+    position: relative;
+  }
+
+  /* Disco background */
+  .disco-bg {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at 30% 20%, #d32f2f 0%, transparent 40%),
+                radial-gradient(circle at 70% 30%, #1976d2 0%, transparent 40%),
+                radial-gradient(circle at 40% 70%, #fbc02d 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, #7b1fa2 0%, transparent 40%),
+                #0a0a2a;
+    animation: disco 4s linear infinite;
+    z-index: 0;
+  }
+  @keyframes disco {
+    0%,100% { filter: hue-rotate(0deg) brightness(0.8); }
+    50% { filter: hue-rotate(180deg) brightness(1.1); }
+  }
+
+  /* Spotlights */
+  .spotlight {
+    position: fixed;
+    width: 300px; height: 600px;
+    background: radial-gradient(ellipse at top, rgba(255,255,255,0.25), transparent 70%);
+    transform-origin: top center;
+    top: -100px;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .spotlight.l { left: 10%; animation: swingL 3s ease-in-out infinite; }
+  .spotlight.r { right: 10%; animation: swingR 3s ease-in-out infinite; }
+  @keyframes swingL {
+    0%,100% { transform: rotate(-20deg); }
+    50% { transform: rotate(20deg); }
+  }
+  @keyframes swingR {
+    0%,100% { transform: rotate(20deg); }
+    50% { transform: rotate(-20deg); }
+  }
+
+  .hud {
+    position: relative;
+    z-index: 5;
+    width: 100%;
+    max-width: 460px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+  }
+  .hud h1 {
+    font-size: 22px;
+    font-weight: 900;
+    text-shadow: 0 0 10px #ffd700, 0 2px 4px rgba(0,0,0,0.8);
+    color: #ffd700;
+    letter-spacing: 1px;
+  }
+  .cheers {
+    background: rgba(0,0,0,0.5);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-weight: 800;
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,215,0,0.5);
+  }
+
+  .stage {
+    position: relative;
+    z-index: 3;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 460px;
+  }
+
+  /* Speech bubble */
+  .bubble {
+    position: absolute;
+    top: 2%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fff;
+    color: #111;
+    padding: 10px 18px;
+    border-radius: 20px;
+    font-weight: 900;
+    font-size: 17px;
+    white-space: nowrap;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -10px; left: 50%;
+    transform: translateX(-50%);
+    border: 10px solid transparent;
+    border-top-color: #fff;
+  }
+  .bubble.show { opacity: 1; animation: bubblePop 0.4s; }
+  @keyframes bubblePop {
+    0% { transform: translateX(-50%) scale(0.5); }
+    60% { transform: translateX(-50%) scale(1.15); }
+    100% { transform: translateX(-50%) scale(1); }
+  }
+
+  .character {
+    width: min(75vw, 320px);
+    height: auto;
+    cursor: pointer;
+    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.6));
+  }
+
+  /* Dancing animations */
+  .character .body-group {
+    transform-origin: 100px 300px;
+    animation: bodyBob 0.5s ease-in-out infinite alternate;
+  }
+  @keyframes bodyBob {
+    0% { transform: translateY(0) rotate(-2deg); }
+    100% { transform: translateY(-10px) rotate(2deg); }
+  }
+  .character .arm-l { transform-origin: 60px 140px; animation: armSwingL 0.5s ease-in-out infinite alternate; }
+  .character .arm-r { transform-origin: 140px 140px; animation: armSwingR 0.5s ease-in-out infinite alternate; }
+  @keyframes armSwingL {
+    0% { transform: rotate(-10deg); }
+    100% { transform: rotate(30deg); }
+  }
+  @keyframes armSwingR {
+    0% { transform: rotate(10deg); }
+    100% { transform: rotate(-30deg); }
+  }
+  .character .leg-l { transform-origin: 88px 230px; animation: legL 0.5s ease-in-out infinite alternate; }
+  .character .leg-r { transform-origin: 112px 230px; animation: legR 0.5s ease-in-out infinite alternate; }
+  @keyframes legL { 0% { transform: rotate(-8deg); } 100% { transform: rotate(8deg); } }
+  @keyframes legR { 0% { transform: rotate(8deg); } 100% { transform: rotate(-8deg); } }
+  .character .head-group {
+    transform-origin: 100px 90px;
+    animation: headNod 0.5s ease-in-out infinite alternate;
+  }
+  @keyframes headNod {
+    0% { transform: rotate(-5deg); }
+    100% { transform: rotate(5deg); }
+  }
+
+  /* Dance styles */
+  .mode-disco .body-group { animation: discoSpin 1s linear infinite; }
+  @keyframes discoSpin {
+    0% { transform: translateY(0) rotate(-8deg); }
+    25% { transform: translateY(-15px) rotate(4deg); }
+    50% { transform: translateY(-5px) rotate(8deg); }
+    75% { transform: translateY(-15px) rotate(-4deg); }
+    100% { transform: translateY(0) rotate(-8deg); }
+  }
+  .mode-robot .body-group,
+  .mode-robot .arm-l,
+  .mode-robot .arm-r,
+  .mode-robot .head-group { animation-timing-function: steps(2, end) !important; }
+  .mode-twist .body-group {
+    animation: twistBody 0.4s ease-in-out infinite alternate;
+  }
+  @keyframes twistBody {
+    0% { transform: rotate(-15deg); }
+    100% { transform: rotate(15deg); }
+  }
+  .mode-jump .body-group { animation: jumpBody 0.5s ease-out infinite; }
+  @keyframes jumpBody {
+    0%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-35px) rotate(-5deg); }
+    60% { transform: translateY(0); }
+  }
+
+  /* Controls */
+  .controls {
+    position: relative;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    width: 100%;
+    max-width: 460px;
+    margin-bottom: 8px;
+  }
+  .ctrl {
+    background: linear-gradient(180deg, #ffd700, #ff9800);
+    color: #1a1a1a;
+    border: 2px solid #fff8e1;
+    border-radius: 16px;
+    padding: 10px 4px;
+    font-weight: 900;
+    font-size: 12px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #e65100, 0 6px 15px rgba(0,0,0,0.5);
+    transition: transform 0.1s, box-shadow 0.1s;
+    text-align: center;
+    line-height: 1.2;
+  }
+  .ctrl .ico { font-size: 22px; display: block; margin-bottom: 2px; }
+  .ctrl:active { transform: translateY(3px); box-shadow: 0 1px 0 #e65100, 0 2px 6px rgba(0,0,0,0.4); }
+  .ctrl.active { background: linear-gradient(180deg, #4caf50, #2e7d32); color: #fff; }
+
+  .bottom-row {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 460px;
+  }
+  .bottom-row button {
+    flex: 1;
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 12px;
+    padding: 12px;
+    font-weight: 800;
+    font-size: 14px;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+  }
+  .bottom-row button.primary {
+    background: linear-gradient(180deg, #e53935, #b71c1c);
+    border: none;
+    font-size: 16px;
+  }
+  .bottom-row button:active { transform: scale(0.96); }
+
+  .floater {
+    position: absolute;
+    pointer-events: none;
+    font-size: 28px;
+    animation: floatUp 1.2s forwards;
+    z-index: 10;
+  }
+  @keyframes floatUp {
+    0% { opacity: 1; transform: translate(0,0) scale(1); }
+    100% { opacity: 0; transform: translate(var(--dx), -120px) scale(1.5); }
+  }
+</style>
+</head>
+<body>
+  <div class="disco-bg"></div>
+  <div class="spotlight l"></div>
+  <div class="spotlight r"></div>
+
+  <div class="hud">
+    <h1>🕺 DANCE PARTY</h1>
+    <div class="cheers">🔥 <span id="cheers">0</span></div>
+  </div>
+
+  <div class="stage">
+    <div class="bubble" id="bubble">LET'S DANCE!</div>
+    <svg class="character" id="char" viewBox="0 0 200 320" xmlns="http://www.w3.org/2000/svg">
+      <g class="body-group">
+        <!-- Legs -->
+        <g class="leg-l">
+          <rect x="80" y="230" width="18" height="60" rx="4" fill="#1a237e"/>
+          <ellipse cx="89" cy="295" rx="14" ry="6" fill="#212121"/>
+        </g>
+        <g class="leg-r">
+          <rect x="102" y="230" width="18" height="60" rx="4" fill="#1a237e"/>
+          <ellipse cx="111" cy="295" rx="14" ry="6" fill="#212121"/>
+        </g>
+
+        <!-- Suit jacket body -->
+        <path d="M55 135 Q55 115 80 110 L120 110 Q145 115 145 135 L145 240 L55 240 Z" fill="#1a237e"/>
+        <!-- Lapels -->
+        <path d="M80 110 L100 140 L85 155 L75 130 Z" fill="#0d1454"/>
+        <path d="M120 110 L100 140 L115 155 L125 130 Z" fill="#0d1454"/>
+        <!-- Shirt -->
+        <path d="M92 112 L92 160 L108 160 L108 112 Z" fill="white"/>
+        <!-- Red tie -->
+        <path d="M95 115 L105 115 L108 175 L100 200 L92 175 Z" fill="#d32f2f"/>
+        <path d="M95 115 L105 115 L104 130 L96 130 Z" fill="#b71c1c"/>
+
+        <!-- Arms -->
+        <g class="arm-l">
+          <rect x="40" y="135" width="22" height="75" rx="10" fill="#1a237e"/>
+          <circle cx="51" cy="218" r="11" fill="#f5c99d"/>
+        </g>
+        <g class="arm-r">
+          <rect x="138" y="135" width="22" height="75" rx="10" fill="#1a237e"/>
+          <circle cx="149" cy="218" r="11" fill="#f5c99d"/>
+        </g>
+
+        <!-- Head -->
+        <g class="head-group">
+          <!-- Neck -->
+          <rect x="92" y="100" width="16" height="15" fill="#e8b382"/>
+          <!-- Face -->
+          <ellipse cx="100" cy="78" rx="38" ry="42" fill="#f5c99d"/>
+          <!-- Signature hair (the swoop) -->
+          <path d="M62 62 Q58 35 82 25 Q100 18 125 22 Q148 30 145 62 Q142 72 130 66 Q128 40 100 38 Q75 40 70 68 Q65 72 62 62 Z" fill="#ffc107"/>
+          <path d="M62 62 Q58 48 90 42 Q110 42 140 50 Q145 58 142 62" stroke="#ffa000" stroke-width="2" fill="none"/>
+          <!-- Ears -->
+          <ellipse cx="62" cy="80" rx="5" ry="8" fill="#e8b382"/>
+          <ellipse cx="138" cy="80" rx="5" ry="8" fill="#e8b382"/>
+          <!-- Eyebrows -->
+          <path d="M76 68 Q82 63 92 68" stroke="#ffa000" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <path d="M108 68 Q118 63 124 68" stroke="#ffa000" stroke-width="3" fill="none" stroke-linecap="round"/>
+          <!-- Eyes -->
+          <circle cx="84" cy="78" r="3.5" fill="#1a1a1a"/>
+          <circle cx="116" cy="78" r="3.5" fill="#1a1a1a"/>
+          <circle cx="85" cy="77" r="1" fill="#fff"/>
+          <circle cx="117" cy="77" r="1" fill="#fff"/>
+          <!-- Nose -->
+          <path d="M100 82 Q97 92 100 96 Q103 92 100 82" fill="#e8b382"/>
+          <!-- Mouth (smile) -->
+          <path d="M85 104 Q100 114 115 104" stroke="#9b2c2c" stroke-width="2.5" fill="#ff7043" stroke-linecap="round"/>
+          <!-- Cheeks -->
+          <circle cx="75" cy="92" r="4" fill="#ffab91" opacity="0.5"/>
+          <circle cx="125" cy="92" r="4" fill="#ffab91" opacity="0.5"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl active" data-mode="default"><span class="ico">🕺</span>NHẠC NỀN</button>
+    <button class="ctrl" data-mode="disco"><span class="ico">🪩</span>DISCO</button>
+    <button class="ctrl" data-mode="robot"><span class="ico">🤖</span>ROBOT</button>
+    <button class="ctrl" data-mode="twist"><span class="ico">🌀</span>TWIST</button>
+  </div>
+  <div class="bottom-row">
+    <button class="primary" id="singBtn">🎤 HÁT!</button>
+    <button id="jumpBtn">🚀 NHẢY</button>
+    <button id="muteBtn">🔊 ÂM</button>
+  </div>
+
+<script>
+const char = document.getElementById('char');
+const bubble = document.getElementById('bubble');
+const cheersEl = document.getElementById('cheers');
+const stage = document.querySelector('.stage');
+const ctrls = document.querySelectorAll('.ctrl');
+const muteBtn = document.getElementById('muteBtn');
+
+let cheers = parseInt(localStorage.getItem('trump_cheers') || '0');
+cheersEl.textContent = cheers;
+let soundOn = true;
+let currentMode = 'default';
+let tempo = 500; // ms per beat
+
+// === Catchphrases / "singing" ===
+const phrases = [
+  "TREMENDOUS! 💥",
+  "BIGLY! 🤩",
+  "HUGE! 🎉",
+  "FANTASTIC! ⭐",
+  "NOBODY DANCES BETTER!",
+  "MAKE PARTY GREAT AGAIN!",
+  "BEAUTIFUL MOVES! 💃",
+  "WE LOVE IT! ❤️",
+  "INCREDIBLE! 🔥",
+  "THE BEST DANCE EVER!",
+  "WINNING! 🏆",
+  "ĐỈNH KÌNH! 🇻🇳",
+  "QUẨY LÊN NÀO! 🎊",
+  "DỮ DỘI QUÁ! 😎",
+  "SUPER DUPER! 🌟"
+];
+
+function showBubble(text) {
+  bubble.classList.remove('show');
+  void bubble.offsetWidth;
+  bubble.textContent = text;
+  bubble.classList.add('show');
+  clearTimeout(showBubble._t);
+  showBubble._t = setTimeout(() => bubble.classList.remove('show'), 1600);
+}
+
+// === Web Audio "music" ===
+let audioCtx = null;
+function getCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+function note(freq, dur = 0.15, type = 'square', gain = 0.08, when = 0) {
+  if (!soundOn) return;
+  const ctx = getCtx();
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.value = gain;
+  o.connect(g); g.connect(ctx.destination);
+  const t = ctx.currentTime + when;
+  o.start(t);
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.stop(t + dur);
+}
+function kick(when = 0) {
+  if (!soundOn) return;
+  const ctx = getCtx();
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(120, ctx.currentTime + when);
+  o.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + when + 0.12);
+  g.gain.setValueAtTime(0.25, ctx.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + when + 0.15);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(ctx.currentTime + when);
+  o.stop(ctx.currentTime + when + 0.2);
+}
+function hat(when = 0) {
+  if (!soundOn) return;
+  const ctx = getCtx();
+  const bufSize = ctx.sampleRate * 0.05;
+  const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass'; hp.frequency.value = 5000;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.08, ctx.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + when + 0.04);
+  src.connect(hp); hp.connect(g); g.connect(ctx.destination);
+  src.start(ctx.currentTime + when);
+  src.stop(ctx.currentTime + when + 0.05);
+}
+
+// Funky bassline
+const bassline = [130.81, 130.81, 164.81, 130.81, 174.61, 130.81, 146.83, 164.81];
+let beat = 0;
+let beatTimer = null;
+function startBeat() {
+  stopBeat();
+  function loop() {
+    kick();
+    hat(tempo / 2000);
+    note(bassline[beat % bassline.length], 0.18, 'sawtooth', 0.06);
+    // occasional lead melody
+    if (beat % 4 === 0) note(523.25, 0.12, 'triangle', 0.05);
+    if (beat % 8 === 3) note(659.25, 0.1, 'triangle', 0.05);
+    if (beat % 8 === 6) note(783.99, 0.1, 'triangle', 0.05);
+    beat++;
+    beatTimer = setTimeout(loop, tempo);
+  }
+  loop();
+}
+function stopBeat() { if (beatTimer) clearTimeout(beatTimer); beatTimer = null; }
+
+function setMode(mode) {
+  currentMode = mode;
+  document.body.className = 'mode-' + mode;
+  ctrls.forEach(c => c.classList.toggle('active', c.dataset.mode === mode));
+  // tempo per mode
+  if (mode === 'disco') tempo = 350;
+  else if (mode === 'robot') tempo = 500;
+  else if (mode === 'twist') tempo = 400;
+  else tempo = 500;
+  // update CSS anim speed
+  document.documentElement.style.setProperty('--tempo', tempo + 'ms');
+  if (audioCtx) startBeat();
+}
+
+ctrls.forEach(c => c.addEventListener('click', () => {
+  getCtx();
+  setMode(c.dataset.mode);
+  if (!beatTimer) startBeat();
+  showBubble('LET\'S GO! 🎵');
+  bump();
+}));
+
+function bump() {
+  cheers++;
+  localStorage.setItem('trump_cheers', cheers);
+  cheersEl.textContent = cheers;
+}
+
+function spawnFloater(txt) {
+  const rect = stage.getBoundingClientRect();
+  const f = document.createElement('div');
+  f.className = 'floater';
+  f.textContent = txt;
+  f.style.left = (rect.width / 2 + (Math.random() - 0.5) * 100) + 'px';
+  f.style.top = (rect.height / 2) + 'px';
+  f.style.setProperty('--dx', ((Math.random() - 0.5) * 120) + 'px');
+  stage.appendChild(f);
+  setTimeout(() => f.remove(), 1300);
+}
+
+char.addEventListener('pointerdown', () => {
+  getCtx();
+  if (!beatTimer) startBeat();
+  spawnFloater(['❤️','🎉','⭐','🔥','👏','🕺','💃'][Math.floor(Math.random() * 7)]);
+  showBubble(phrases[Math.floor(Math.random() * phrases.length)]);
+  note(880, 0.1, 'sine', 0.1);
+  if (navigator.vibrate) navigator.vibrate(20);
+  bump();
+});
+
+document.getElementById('singBtn').addEventListener('click', () => {
+  getCtx();
+  if (!beatTimer) startBeat();
+  const notes = [523.25, 587.33, 659.25, 698.46, 783.99, 880, 987.77, 1046.5];
+  const seq = Array.from({length: 6}, () => notes[Math.floor(Math.random() * notes.length)]);
+  seq.forEach((f, i) => note(f, 0.2, 'square', 0.1, i * 0.18));
+  showBubble(phrases[Math.floor(Math.random() * phrases.length)]);
+  bump();
+});
+
+document.getElementById('jumpBtn').addEventListener('click', () => {
+  getCtx();
+  if (!beatTimer) startBeat();
+  document.body.className = 'mode-jump';
+  setTimeout(() => setMode(currentMode), 1200);
+  note(440, 0.1, 'square', 0.1);
+  note(880, 0.1, 'square', 0.1, 0.15);
+  showBubble('JUMP! 🚀');
+  bump();
+});
+
+muteBtn.addEventListener('click', () => {
+  soundOn = !soundOn;
+  muteBtn.textContent = soundOn ? '🔊 ÂM' : '🔇 TẮT';
+  if (!soundOn) stopBeat();
+  else if (audioCtx) startBeat();
+});
+
+// auto greeting
+setTimeout(() => showBubble('TAP TRUMP ĐỂ QUẨY! 🎉'), 400);
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
