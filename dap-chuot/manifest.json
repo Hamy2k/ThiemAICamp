@@ -1,0 +1,19 @@
+{
+  "name": "Đập Chuột Vàng",
+  "short_name": "Đập Chuột",
+  "description": "Game đập chuột gây nghiện - combo, bonus, kỷ lục",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#2ecc71",
+  "theme_color": "#2ecc71",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
