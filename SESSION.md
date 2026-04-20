@@ -5,7 +5,7 @@
 ## Lần cập nhật cuối
 
 **Ngày:** 2026-04-20
-**Trạng thái:** Đang xây MES cho Proterial Vietnam — 3 module: Kho, Mua hàng, IQC
+**Trạng thái:** MES Proterial — vừa thêm migration 026 (stock views + trace), vá lỗ hổng WMS material-issues, thêm API truy vết
 
 ## 📍 Project location (KHÔNG phải trong C:\ThiemAICamp)
 
@@ -15,51 +15,72 @@ C:\Users\LEGION\Downloads\mes-complete-v2\mes-backend
 
 - Stack: Node.js (Express) + PostgreSQL + WebSocket
 - Git repo riêng, branch master
-- Commit cuối: `3085ba0 fix(mod09): wire purchasing UI to real API`
+- Commit cuối (trước phiên này): `3085ba0 fix(mod09): wire purchasing UI to real API`
 
-## 🔥 Đang làm dở — có uncommitted changes
+## 🔥 Đã làm trong phiên này (chưa commit)
 
-### Module IQC (Incoming Quality Control) — HOÀN TOÀN MỚI, chưa commit
-- [ ] `db/migrations/025_iqc_ncr.sql` — schema: qc_sampling_config, qc_inspections, qc_inspection_items, coa_documents, ncr_reports, ncr_history, ng_inventory, view v_supplier_scorecard. Thêm QC_HOLD + NG-01 vào warehouse_locations.
-- [ ] `routes/iqc.js` (473 dòng) — endpoints: GET /pending, /inspections, /inspections/:id, PATCH /inspections/:id, POST /inspections/:id/start, PUT /inspections/:id/items, POST /inspections/:id/result (pass/fail/partial_pass — auto-split inventory + tạo NCR), POST /inspections/:id/coa, /sampling-config, /scorecard, /dashboard
-- [ ] `routes/ncr.js` — NCR workflow (draft→sent→ack→disposition→closed)
+### Mới: Docs cấu trúc dữ liệu
+- [x] `docs/DATA_FLOW.md` — sơ đồ + quan hệ bảng PR→PO→GR→IQC→NCR→WMS, quy ước location, transaction_type, luồng trạng thái, API chính
+
+### Mới: Migration 026 — stock views
+- [x] `db/migrations/026_stock_views_and_trace.sql`:
+  - `v_material_stock` — tách `available_qty` (loại QC_HOLD + NG-01) / `qc_hold_qty` / `ng_qty` / `total_qty` + stock_level (ok/low/critical/out)
+  - `v_supply_chain_trace` — 1 row per GR line với chain PR→PO→GR→IQC→NCR→NG
+  - `v_stock_movement_30d` — luân chuyển kho 30 ngày theo loại transaction
+  - `assert_issuable_location()` — function chặn xuất từ QC_HOLD/NG-01 (tuỳ chọn gọi ở backend)
+  - 5 index tăng tốc
+
+### Patch: `routes/wms.js`
+- [x] `POST /material-issues`:
+  - Bắt buộc `from_location`, chặn QC_HOLD / NG-01
+  - Trừ `inventory_stocks` có filter `location = from_location` (không còn trừ toàn bộ)
+  - Throw `INSUFFICIENT_STOCK` → 409 nếu không đủ
+  - Ghi `location` vào `inventory_transactions`
+- [x] `GET /stock?breakdown=1` — trả về data từ `v_material_stock`
+- [x] `GET /qc-hold` (mới) — lô đang chờ IQC
+- [x] `GET /ng` (mới) — kho NG-01
+- [x] `GET /dashboard` — breakdown `raw_available`, `raw_qc_hold`, `raw_ng`, `raw_total`, `qc_hold_batches`
+- [x] `GET /low-stock` — dùng `v_material_stock.available_qty` thay vì tổng thô
+
+### Patch: `routes/purchasing.js`
+- [x] `GET /traceability/:gr_id?` (mới) — truy vết end-to-end 1 lô
+  - Query param: `gr_number`, `lot_no`, `material_code`
+  - Trả `v_supply_chain_trace` + snapshot `v_material_stock`
+
+### Patch: `scripts/apply_new_migrations.js`
+- [x] Thêm `026_stock_views_and_trace.sql` vào TARGETS
+
+## 🔥 Còn đang dở — cần check sau
+
+### Từ phiên trước (vẫn chưa xử lý):
+- [ ] `db/migrations/025_iqc_ncr.sql` — chưa rõ đã chạy vào DB PostgreSQL chưa?
+- [ ] `routes/iqc.js` — IQC workflow
+- [ ] `routes/ncr.js` — NCR workflow
 - [ ] `public/mod_iqc.html` — UI IQC
+- [ ] `public/_nav.js` + `public/mod09_purchasing.html` + `public/mod_warehouse.html` — UI đang dở
 
-**Luồng IQC:**
-1. GR về → stock vào QC_HOLD, qc_status='pending'
-2. qc_inspections auto-tạo per GR line, priority tính tự động
-3. IQC kiểm → pass: transfer QC_HOLD → kho chính; fail: → NG + auto-tạo NCR
-4. NCR: draft → sent (IQC tự gửi) → supplier_ack → (return_supplier | conditional_accept) → closed
-5. supplier_scorecard view update realtime (grade A/B/C/D theo ncr_rate_pct)
+### Cần làm tiếp
+1. Chạy migration 025 + 026 vào PostgreSQL: `npm run db:init` hoặc `node scripts/apply_new_migrations.js`
+2. UI hiển thị breakdown QC_HOLD / NG / Available trong dashboard WMS
+3. Test end-to-end: tạo PR → duyệt PO → nhập GR → IQC pass/fail → verify stock tách đúng
+4. Ngó lại `public/mod09_purchasing.html` thêm tab "Truy vết" gọi `/api/purchasing/traceability`
 
-### Module WMS (Quản lý kho) — modified, chưa commit
-- [ ] `routes/wms.js` (656 dòng)
-- [ ] `public/mod_warehouse.html`
+## Blocker / Câu hỏi cần user quyết
 
-### Module Purchasing (Mua hàng) — modified, chưa commit
-- [ ] `routes/purchasing.js` (919 dòng)
-- [ ] `public/mod09_purchasing.html`
-
-### File chung modified
-- [ ] `public/_nav.js` — thêm menu IQC
-- [ ] `server.js` — wire iqcRoutes + ncrRoutes (đã có, cần verify)
-- [ ] `scripts/apply_new_migrations.js`
+1. ⏳ Đã chạy migration 025 + 026 vào PostgreSQL chưa? (cần `node scripts/apply_new_migrations.js`)
+2. ⏳ Test end-to-end IQC flow đã chạy chưa?
+3. ⏳ Khi nào commit batch? Giờ có 5 file mới + 5 file modified.
 
 ## Lệnh resume
 
 ```bash
 cd "C:\Users\LEGION\Downloads\mes-complete-v2\mes-backend"
-git status                    # xem file đang modify
-claude --continue             # tiếp tục phiên Claude
+git status                          # xem file đang modify
+node scripts/apply_new_migrations.js  # áp migration 025 + 026
+npm start                           # chạy server
 ```
 
-Nói với Claude: **"tiếp tục MES — phần đang dở"** → em đọc SESSION.md.
-
-## Blocker / Câu hỏi cần user quyết
-
-1. Đã chạy migration 025 vào PostgreSQL chưa? (nếu chưa cần `npm run db:init` hoặc chạy thủ công)
-2. Test end-to-end IQC flow đã chạy chưa?
-3. Khi nào commit batch IQC module? (4 file mới + migration)
+Nói với Claude: **"tiếp tục MES"** → em đọc SESSION.md.
 
 ## Context tham khảo
 
@@ -68,6 +89,7 @@ Nói với Claude: **"tiếp tục MES — phần đang dở"** → em đọc SE
 - Port: 3000
 - DB: `mes_proterial` trên PostgreSQL local
 - Deploy target: Ubuntu server + PM2 + Cloudflare Tunnel (KHÔNG phải Vercel)
+- Docs cấu trúc dữ liệu: `docs/DATA_FLOW.md`
 
 ---
 
