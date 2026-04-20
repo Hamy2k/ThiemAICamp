@@ -3,7 +3,7 @@
 ## Lần cập nhật cuối
 
 **Ngày:** 2026-04-20
-**Trạng thái:** MES Proterial — hoàn tất 5/5 cải tiến top-app cho Kho thông minh
+**Trạng thái:** MES Proterial — 5/5 cải tiến top-app + 3 backlog UI (replenish widget / lot viewer / putaway)
 
 ## 📍 Project location
 
@@ -13,7 +13,7 @@ C:\Users\LEGION\Downloads\mes-complete-v2\mes-backend
 
 - Node.js (Express) + PostgreSQL + WebSocket
 - Git repo local (KHÔNG có remote)
-- Commit cuối: `f640a7a feat(purchasing): replenishment engine — dynamic ROP + days-of-supply + auto-PR`
+- Commit cuối: `15c18f4 feat(wms): putaway suggestion — gợi ý kho đích khi nhận hàng`
 
 ## ✅ 5 cải tiến top-app đã làm trong phiên này
 
@@ -37,15 +37,22 @@ C:\Users\LEGION\Downloads\mes-complete-v2\mes-backend
 - `4171fce` fix modal openM()
 - `363c457` fix QC_HOLD stuck warehouse=QC_HOLD
 
-## 🔥 Còn đang dở / backlog
+## 🆕 Làm thêm trong phiên (backlog UI)
 
-Chưa làm UI cho:
-- Panel replenishment suggestions trong mod_warehouse (API đã sẵn sàng)
-- Modal chọn lot cụ thể khi material-issue (picker FEFO hiện sort auto)
-- Putaway suggestion (gợi ý location khi nhập)
-- Mobile/PWA UI cho warehouse worker
-- Cycle count schedule theo ABC
-- Supplier portal + EDI
+| # | Feature | Commit |
+|---|---|---|
+| 11 | **UI replenishment widget** Dashboard | `233daab` |
+| 12 | **FEFO lot viewer** trong modal xuất NVL + GET /wms/lots | `aa5de62` |
+| 13 | **Putaway suggestion** GET /wms/putaway/suggest + auto-hint modal nhận hàng | `15c18f4` |
+
+## 🔥 Backlog còn lại
+
+- Modal chọn lot cụ thể với override qty per-lot (hiện chỉ xem, FEFO auto)
+- Mobile/PWA UI cho warehouse worker (scan + pick on phone)
+- Cycle count schedule theo ABC class (A: 1 tuần, B: 1 tháng, C: 1 quý)
+- Supplier portal (NCC tự confirm PO, push ASN)
+- EDI / 3-way matching PO-GR-Invoice
+- Analytics: turnover, dead stock, shrinkage
 
 ## Lệnh resume
 
