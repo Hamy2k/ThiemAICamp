@@ -6,5 +6,8 @@
 - Tu push len GitHub khi xong task 
 - Deploy len Vercel sau khi pass test 
 - Bao cao ket qua bang tieng Viet 
+- Dau moi phien: doc SESSION.md de biet viec dang do
+- Cuoi moi phien hoac khi user nghi: cap nhat SESSION.md va commit wip
 
 @AGENTS.md
+@SESSION.md
