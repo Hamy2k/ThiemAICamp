@@ -3,7 +3,16 @@
 ## Lần cập nhật cuối
 
 **Ngày:** 2026-04-20
-**Trạng thái:** MES Proterial — flow PO-WO-Kho-BTP hoàn chỉnh, có MRP Workbench + PO split
+**Trạng thái:** MES Proterial stable + **chess_game/** mới (Flutter mobile game — retention + monetization)
+
+## 🆕 Project mới trong workspace: chess_game/
+
+- **Path:** `C:\ThiemAICamp\chess_game`
+- **Stack:** Flutter 3.24+, Dart, google_mobile_ads, provider, shared_preferences
+- **Scope MVP:** Quick Play, Daily Challenge, Puzzle, Boss Battle, Shop, XP/coin economy
+- **Engine:** minimax + alpha-beta (depth 1-4), PST eval, style-aware boss AI
+- **Build:** chạy `flutter create --platforms=android .` → `flutter pub get` → `flutter build apk --release`
+- **Backlog:** thêm Stockfish cho Master mode, IAP thật, sound files, leaderboard backend
 
 ## 📍 Project location
 
