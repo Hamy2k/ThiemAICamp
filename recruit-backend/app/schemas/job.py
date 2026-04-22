@@ -17,11 +17,12 @@ HookStyle = Literal["urgency", "salary_first", "proximity", "friendly", "detaile
 class JobCreateRequest(BaseModel):
     title: str = Field(min_length=3, max_length=200)
     salary_text: str | None = None
-    location_raw: str = Field(min_length=3, max_length=500)
+    location_raw: str = Field(min_length=1, max_length=500)
     requirements_raw: str | None = None
     shift: ShiftLiteral | None = None
     start_date: date | None = None
     target_hires: int = Field(default=1, ge=1, le=500)
+    company_name_override: str | None = Field(default=None, max_length=200)
 
 
 class AIWarning(BaseModel):

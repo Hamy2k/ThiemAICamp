@@ -32,9 +32,10 @@ export const leadCreateSchema = z.object({
 export type LeadCreateFormValues = z.infer<typeof leadCreateSchema>;
 
 export const jobCreateSchema = z.object({
+  company_name_override: z.string().trim().max(200).optional().or(z.literal("")),
   title: z.string().trim().min(3, "Tiêu đề quá ngắn.").max(200),
   salary_text: z.string().trim().max(100).optional().or(z.literal("")),
-  location_raw: z.string().trim().min(3, "Vui lòng nhập địa điểm.").max(500),
+  location_raw: z.string().trim().min(1, "Vui lòng nhập địa điểm.").max(500),
   requirements_raw: z.string().trim().max(2000).optional().or(z.literal("")),
   shift: z.enum(["day", "night", "rotating", "flexible"]).optional(),
   start_date: z.string().optional().or(z.literal("")),

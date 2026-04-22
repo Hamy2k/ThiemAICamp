@@ -35,6 +35,9 @@ class Job(Base):
     target_hires: Mapped[int] = mapped_column(Integer, server_default="1", nullable=False)
     status: Mapped[str] = mapped_column(Text, server_default="draft", nullable=False)
     ai_warnings: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    # Override the company name shown on poster/post copy for this job.
+    # Useful for agencies/freelance HR posting on behalf of multiple clients.
+    company_name_override: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"))
     published_at: Mapped[datetime | None] = mapped_column()
     closed_at: Mapped[datetime | None] = mapped_column()

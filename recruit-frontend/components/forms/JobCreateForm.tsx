@@ -29,6 +29,7 @@ export function JobCreateForm({ token }: Props) {
   } = useForm<JobCreateFormValues>({
     resolver: zodResolver(jobCreateSchema),
     defaultValues: {
+      company_name_override: "",
       title: "",
       salary_text: "",
       location_raw: "",
@@ -42,6 +43,7 @@ export function JobCreateForm({ token }: Props) {
     try {
       const job = await api.createJob(
         {
+          company_name_override: values.company_name_override || undefined,
           title: values.title,
           salary_text: values.salary_text || undefined,
           location_raw: values.location_raw,
@@ -69,6 +71,22 @@ export function JobCreateForm({ token }: Props) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+      <div>
+        <Label htmlFor="company_name_override">
+          Tên công ty / thương hiệu (tùy chọn)
+        </Label>
+        <Input
+          id="company_name_override"
+          placeholder="VD: Công ty TNHH ABC Plastics"
+          hasError={!!errors.company_name_override}
+          {...register("company_name_override")}
+        />
+        <p className="mt-1 text-xs text-[var(--color-ink-muted)]">
+          Để trống = dùng tên công ty của bạn. Điền nếu đang tuyển hộ khách hàng khác.
+        </p>
+        <FieldError message={errors.company_name_override?.message} />
+      </div>
+
       <div>
         <Label htmlFor="title" required>
           Chức danh

@@ -135,6 +135,7 @@ export interface JobCreatePayload {
   title: string;
   salary_text?: string;
   location_raw: string;
+  company_name_override?: string;
   requirements_raw?: string;
   shift?: "day" | "night" | "rotating" | "flexible";
   start_date?: string;

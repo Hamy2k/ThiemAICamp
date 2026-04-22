@@ -53,20 +53,24 @@ async def create_job(
     hr: HRUser = Depends(require_hr_user),
     request_id: str = Depends(get_request_id),
 ) -> JobResponse | dict:
-    """Create a draft job (edge case 4 — unrealistic salary tracked via ai_warnings later)."""
+    """Create a draft job. Location is soft-matched: if gazetteer fails,
+    use the raw text as display + neutral default coords (TPHCM Q1)."""
+    from decimal import Decimal as D
     resolved = search_by_fuzzy_name(body.location_raw)
+    ai_warnings: list[dict] = []
     if resolved is None:
-        return JSONResponse(
-            status_code=400,
-            content=error_payload(
-                "VALIDATION_FAILED",
-                "Không nhận ra địa điểm. Vui lòng nhập tên quận/huyện + tỉnh/thành.",
-                request_id,
-                field="location_raw",
-            ),
-        )
+        # Soft fallback — HR can type anything; scoring uses null distance neutral (50pts)
+        district = body.location_raw.strip()
+        city = "(chưa xác định)"
+        lat = D("10.7769")   # TPHCM Q1 default
+        lng = D("106.7009")
+        ai_warnings.append({
+            "code": "VAGUE_LOCATION",
+            "message": "Không nhận ra quận/huyện. Dùng tạm tên địa điểm bạn nhập. Ứng viên vẫn đăng ký được nhưng điểm location sẽ kém chính xác.",
+        })
+    else:
+        district, city, lat, lng = resolved
 
-    district, city, lat, lng = resolved
     salary_min, salary_max = _parse_salary(body.salary_text)
 
     job = Job(
@@ -85,6 +89,8 @@ async def create_job(
         shift=body.shift,
         requirements_raw=body.requirements_raw,
         target_hires=body.target_hires,
+        company_name_override=(body.company_name_override or "").strip() or None,
+        ai_warnings=ai_warnings or None,
         status="draft",
     )
     db.add(job)
@@ -109,9 +115,9 @@ async def generate_content(
             status_code=404,
             content=error_payload("NOT_FOUND", "Không tìm thấy việc làm.", request_id),
         )
-    # Load company name for poster + content personalization
+    # Company name for poster + content: prefer per-job override, else HR's company
     _company = await db.get(Company, job.company_id)
-    _company_name = _company.name if _company else None
+    _company_name = job.company_name_override or (_company.name if _company else None)
 
     try:
         result = await generate_variants(
