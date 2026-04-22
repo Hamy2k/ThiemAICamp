@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { api, ApiError } from "@/lib/api";
 import type { LeadListItem } from "@/types/api";
+import { AdminNav } from "@/components/admin/AdminNav";
 
 type TierFilter = "all" | "hot" | "warm" | "cold";
 
@@ -18,6 +19,7 @@ export default function LeadsListPage() {
   const [items, setItems] = useState<LeadListItem[] | null>(null);
   const [total, setTotal] = useState(0);
   const [filter, setFilter] = useState<TierFilter>("all");
+  const [jobFilter, setJobFilter] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -25,6 +27,9 @@ export default function LeadsListPage() {
     try {
       setToken(window.localStorage.getItem("rl.hr.token"));
     } catch {}
+    const params = new URLSearchParams(window.location.search);
+    const jid = params.get("job_id");
+    if (jid) setJobFilter(jid);
   }, []);
 
   useEffect(() => {
@@ -32,7 +37,10 @@ export default function LeadsListPage() {
     setLoading(true);
     setError(null);
     api
-      .listLeads(token, { tier: filter === "all" ? undefined : filter })
+      .listLeads(token, {
+        tier: filter === "all" ? undefined : filter,
+        job_id: jobFilter || undefined,
+      })
       .then((res) => {
         setItems(res.items);
         setTotal(res.total);
@@ -41,17 +49,48 @@ export default function LeadsListPage() {
         setError(err instanceof ApiError ? err.message : "Không tải được danh sách.");
       })
       .finally(() => setLoading(false));
-  }, [token, filter]);
+  }, [token, filter, jobFilter]);
+
+  function downloadCsv() {
+    if (!items || items.length === 0) return;
+    const header = [
+      "full_name",
+      "phone_masked",
+      "tier",
+      "score_total",
+      "area",
+      "distance_km",
+      "source",
+      "job_title",
+      "created_at",
+    ];
+    const rows = items.map((it) => [
+      escapeCsv(it.full_name),
+      escapeCsv(it.phone_masked),
+      it.tier ?? "",
+      it.score_total?.toString() ?? "",
+      escapeCsv(it.area ?? ""),
+      it.distance_km?.toString() ?? "",
+      escapeCsv(it.source_display_name ?? ""),
+      escapeCsv(it.job_title ?? ""),
+      it.created_at,
+    ]);
+    // BOM + CRLF for Excel VN compatibility
+    const csv = "\uFEFF" + [header, ...rows].map((r) => r.join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ung-vien-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   if (!token) {
     return (
       <main className="mx-auto max-w-md px-4 py-10">
         <p className="text-sm text-[var(--color-ink-muted)]">
-          Cần đăng nhập HR. Truy cập{" "}
-          <a href="/admin/jobs/new" className="underline text-[var(--color-brand-dark)]">
-            /admin/jobs/new
-          </a>{" "}
-          để nhập token.
+          Cần đăng nhập HR.
         </p>
       </main>
     );
@@ -59,22 +98,35 @@ export default function LeadsListPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8">
-      <header className="mb-6">
-        <nav className="mb-3 flex items-center gap-4 text-sm">
-          <a href="/admin/jobs/new" className="text-[var(--color-brand-dark)] underline">
-            + Tạo việc làm
-          </a>
-          <a href="/admin/leads" className="text-[var(--color-ink)] font-semibold">
-            Ứng viên
-          </a>
-        </nav>
-        <h1 className="text-2xl font-bold">Danh sách ứng viên</h1>
-        <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
-          Tổng: {total} ứng viên
-        </p>
+      <AdminNav />
+
+      <header className="mb-6 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Danh sách ứng viên</h1>
+          <p className="mt-1 text-sm text-[var(--color-ink-muted)]">
+            Tổng: {total} ứng viên
+            {jobFilter && (
+              <span>
+                {" "}· lọc theo 1 việc{" "}
+                <button
+                  onClick={() => setJobFilter("")}
+                  className="underline text-[var(--color-brand-dark)]"
+                >
+                  (bỏ lọc)
+                </button>
+              </span>
+            )}
+          </p>
+        </div>
+        <button
+          onClick={downloadCsv}
+          disabled={!items || items.length === 0}
+          className="flex-shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+        >
+          📥 Xuất CSV
+        </button>
       </header>
 
-      {/* Filter bar */}
       <div className="mb-4 flex flex-wrap gap-2">
         {(["all", "hot", "warm", "cold"] as TierFilter[]).map((t) => (
           <button
@@ -83,7 +135,7 @@ export default function LeadsListPage() {
             className={
               filter === t
                 ? "rounded-lg bg-[var(--color-brand-dark)] px-4 py-2 text-sm font-semibold text-white"
-                : "rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-[var(--color-ink)] hover:bg-slate-50"
+                : "rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm"
             }
           >
             {t === "all" ? "Tất cả" : t.toUpperCase()}
@@ -178,4 +230,11 @@ export default function LeadsListPage() {
       )}
     </main>
   );
+}
+
+function escapeCsv(s: string): string {
+  if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
+    return `"${s.replaceAll("\"", "\"\"")}"`;
+  }
+  return s;
 }

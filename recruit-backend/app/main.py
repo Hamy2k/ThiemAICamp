@@ -10,7 +10,17 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.deps import get_request_id
-from app.api.v1 import analytics, health, hr_leads, jobs, leads, screening, tracking
+from app.api.v1 import (
+    analytics,
+    health,
+    hr_jobs,
+    hr_leads,
+    hr_sources,
+    jobs,
+    leads,
+    screening,
+    tracking,
+)
 from app.config import get_settings
 from app.utils.logging import setup_logging
 
@@ -41,6 +51,8 @@ def create_app() -> FastAPI:
     app.include_router(tracking.router, prefix="/v1")
     app.include_router(analytics.router, prefix="/v1")
     app.include_router(hr_leads.router, prefix="/v1")
+    app.include_router(hr_jobs.router, prefix="/v1")
+    app.include_router(hr_sources.router, prefix="/v1")
 
     # Static: auto-generated job posters for HR to attach when posting to FB
     posters_dir = Path(__file__).resolve().parent.parent / "public" / "posters"

@@ -253,6 +253,35 @@ export interface LeadDetailResponse {
   consent_granted_at: string | null;
 }
 
+// ─── HR jobs list ───
+
+export interface JobListItem {
+  id: string;
+  title: string;
+  status: "draft" | "active" | "paused" | "closed";
+  location_short: string;
+  salary_text: string | null;
+  target_hires: number;
+  created_at: string;
+  lead_count: number;
+  qualified_count: number;
+  total_clicks: number;
+}
+
+export interface JobListResponse {
+  items: JobListItem[];
+  total: number;
+}
+
+// ─── HR sources list ───
+
+export interface SourceItem {
+  id: string;
+  channel: "facebook" | "zalo" | "direct" | "unknown" | "other";
+  external_id: string | null;
+  display_name: string;
+}
+
 export interface TrackingLinkResponse {
   tracking_id: string;
   share_url: string;

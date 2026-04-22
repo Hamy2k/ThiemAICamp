@@ -3,6 +3,7 @@ import {
   type ApiErrorResponse,
   type GenerateContentResponse,
   type JobCreatePayload,
+  type JobListResponse,
   type JobResponse,
   type LeadCreatePayload,
   type LeadCreateResponse,
@@ -13,6 +14,7 @@ import {
   type ScreeningCompleteResponse,
   type ScreeningTurnPayload,
   type ScreeningTurnResponse,
+  type SourceItem,
 } from "@/types/api";
 
 /**
@@ -170,6 +172,78 @@ export const api = {
       }
     );
   },
+
+  async listJobs(
+    token: string,
+    opts: { status?: string; limit?: number } = {}
+  ): Promise<JobListResponse> {
+    const qs = new URLSearchParams();
+    if (opts.status) qs.set("status", opts.status);
+    qs.set("limit", String(opts.limit ?? 50));
+    return request<JobListResponse>(`/v1/hr/jobs/list?${qs.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  },
+
+  async listSources(token: string): Promise<SourceItem[]> {
+    return request<SourceItem[]>(`/v1/hr/sources`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  },
+
+  async createSource(
+    payload: { channel: string; external_id?: string; display_name: string; notes?: string },
+    token: string
+  ): Promise<SourceItem> {
+    return request<SourceItem>(`/v1/hr/sources`, {
+      method: "POST",
+      body: payload,
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  },
+
+  async listSourceAnalytics(
+    jobId: string,
+    token: string
+  ): Promise<{ rows: SourceAnalyticsRow[] }> {
+    return request(`/v1/hr/analytics/sources?job_id=${encodeURIComponent(jobId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  },
+
+  async listVariantAnalytics(
+    jobId: string,
+    token: string
+  ): Promise<{ rows: VariantAnalyticsRow[] }> {
+    return request(`/v1/hr/analytics/variants?job_id=${encodeURIComponent(jobId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  },
 };
+
+export interface SourceAnalyticsRow {
+  source_channel: string;
+  source_id: string | null;
+  display_name: string;
+  clicks: number;
+  leads: number;
+  qualified: number;
+  ctr_pct: number | null;
+  conversion_pct: number | null;
+}
+
+export interface VariantAnalyticsRow {
+  variant_id: string;
+  variant_index: number;
+  hook_style: string;
+  clicks: number;
+  leads: number;
+  qualified: number;
+  conversion_pct: number | null;
+}
 
 export { ApiError };

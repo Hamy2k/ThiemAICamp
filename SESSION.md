@@ -32,7 +32,20 @@
   cd C:\ThiemAICamp\recruit-frontend && npm run dev
   # Browser: http://localhost:3000/admin/leads
   ```
-- **Next:** (1) setup Claude API key thật để thấy Sonnet gen nội dung thật; (2) deploy Railway + Vercel theo recruit-deploy/DEPLOY.md; (3) Telegram bot setup
+- **Phase 5 (post-commit b3b543e):**
+  - `/admin/sources` — HR thêm FB group / Zalo qua UI
+  - `/admin/jobs` — list thật với click/lead/qual counters per job
+  - `/admin/analytics?job_id=` — SVG bar charts + funnel (click→lead→qualified)
+  - `/admin/leads` — CSV export + filter by job_id
+  - AdminNav dùng chung 5 trang
+  - Backend: `/v1/hr/jobs/list`, `/v1/hr/sources` (GET)
+  - `recruit-deploy/USER_ACTIONS_NEEDED.md` — user-required-credentials checklist
+- **Next (user-action-only, app không tự làm được):**
+  1. Anthropic key (~$5 nạp) → AI gen content thật
+  2. Telegram @BotFather → HR push notification
+  3. Railway + Vercel deploy (~$10/mo) → production
+  4. FB group admin access → post thật
+  5. Pilot 1 job thật 1-2 tuần → data real-world
 
 ## 🆕 Project: roman-legion-chess/ (ACTIVE — paused chờ Phase 3)
 
