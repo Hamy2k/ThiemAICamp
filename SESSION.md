@@ -3,7 +3,36 @@
 ## Lần cập nhật cuối
 
 **Ngày:** 2026-04-22
-**Trạng thái:** MES Proterial stable + **chess_game/** (Flutter APK đã build) + **roman-legion-chess/** (Phase 2 xong, chờ duyệt Phase 3)
+**Trạng thái:** MES Proterial stable + **chess_game/** (Flutter APK đã build) + **roman-legion-chess/** (Phase 2 xong) + **recruit-* (Phase 1-4 + demo C live)**
+
+## 🆕 Project: recruit-backend/ + recruit-frontend/ + recruit-deploy/ (AI job distribution VN)
+
+- **Phase 1:** System design (DB schema, API contract, AI prompts, cost analysis, distribution tracking). Validated với PGlite — 10/10 smoke tests pass.
+- **Phase 2:** FastAPI backend + SQLAlchemy 2 async + Alembic + Anthropic SDK + 15 tables + 24 tests.
+- **Phase 3:** Next.js 15 + React 19 + Tailwind v4 + zod + RHF. Candidate flow (landing + screening + success) + HR admin.
+- **Phase 4:** Railway + Vercel deploy config + Sentry/Logtail/UptimeRobot guides + runbook + cost sheet ($10/mo infra + ~$133 Claude COGS).
+- **Demo C (local run) — tìm và fix 7 Phase 2 bugs thật:**
+  - datetime TZ mismatch trong consent_records insert → fix `DateTime(timezone=True)` global trong Base
+  - pgcrypto extension không cần với PG 13+ → remove
+  - Fallback screener loop cùng câu hỏi → sequential by turn
+  - `response_model=X` + return error dict → JSONResponse crash → dùng JSONResponse explicit
+  - Gazetteer 17 landmark too narrow → mở rộng 40+ + city fallback + prefix strip
+  - Merge filter drop empty list → change: drop None/`{}` only, keep `[]`
+  - Fallback parser strict, không catch "mai"/"chưa"/"không" đơn → turn-aware heuristic
+- **Option X (cut scope theo user):** 5 variants → 1 variant best + auto share kit (1 link/source) + merge link sẵn trong text
+- **Post polish:** link lên đầu 155 char FB preview, Pillow poster 1200×630 với gradient + pill + yellow salary box + company name + CTA
+- **Admin UI:** `/admin/leads` list với tier filter + `/admin/leads/:id` detail với transcript + score breakdown + attribution + PDPD audit
+- **Env local:**
+  - Backend: `C:\ThiemAICamp\recruit-backend` · venv `.venv` · port 8000 · DB `recruit_demo` (PG 18, pw 123456) · no ANTHROPIC_API_KEY (dùng stub) · no TELEGRAM_BOT_TOKEN
+  - Frontend: `C:\ThiemAICamp\recruit-frontend` · port 3000 · `NEXT_PUBLIC_API_BASE_URL=http://192.168.1.225:8000` cho phone LAN test
+  - Demo tracking_id: `demo123abc` · HR token: `demo-hr-token`
+- **Resume local demo:**
+  ```bash
+  cd C:\ThiemAICamp\recruit-backend && .venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+  cd C:\ThiemAICamp\recruit-frontend && npm run dev
+  # Browser: http://localhost:3000/admin/leads
+  ```
+- **Next:** (1) setup Claude API key thật để thấy Sonnet gen nội dung thật; (2) deploy Railway + Vercel theo recruit-deploy/DEPLOY.md; (3) Telegram bot setup
 
 ## 🆕 Project: roman-legion-chess/ (ACTIVE — paused chờ Phase 3)
 

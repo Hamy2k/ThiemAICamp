@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* Tailwind v4 CSS-first theme — system font stack only (no network load). */
+@theme {
+  --font-sans:
+    "-apple-system", BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Noto Sans", "Liberation Sans", sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji";
+
+  --color-brand: #0ea5e9;
+  --color-brand-dark: #0369a1;
+  --color-ink: #0f172a;
+  --color-ink-muted: #475569;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f1f5f9;
+  --color-danger: #dc2626;
+  --color-success: #16a34a;
+}
+
+/* Base resets for low-end Android */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-size-adjust: 100%;
+  overscroll-behavior-y: none;
+}
+
+/* Larger default hit area on mobile */
+@media (pointer: coarse) {
+  button,
+  a {
+    min-height: 44px;
+  }
+}
+
+/* Reduce motion on request */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

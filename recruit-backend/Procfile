@@ -1,0 +1,4 @@
+# Fallback for PaaS that read Procfile (Render, Fly, some Railway configs).
+# Railway uses railway.toml above; this stays in sync.
+release: alembic upgrade head
+web: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2 --timeout-keep-alive 30
