@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    width: 100%;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: 'Cinzel', system-ui, sans-serif;
+  }
+
+  #game canvas {
+    display: block;
+    touch-action: none;
+  }
+}
+
+@layer components {
+  .roman-title {
+    @apply font-display font-bold uppercase tracking-banner text-gold;
+    text-shadow:
+      0 2px 0 rgba(139, 10, 31, 0.65),
+      0 0 12px rgba(212, 175, 55, 0.25);
+  }
+
+  .roman-btn {
+    @apply relative inline-flex items-center justify-center gap-2
+           px-6 py-3 rounded-md border-2 border-gold
+           font-display font-semibold uppercase tracking-button text-gold
+           bg-gradient-to-b from-obsidian-deep to-obsidian
+           transition-[filter,transform,box-shadow] duration-150
+           hover:shadow-gold-strong hover:brightness-110
+           active:brightness-90 active:shadow-inner active:translate-y-px
+           disabled:opacity-40 disabled:cursor-not-allowed
+           disabled:hover:shadow-none disabled:hover:brightness-100;
+  }
+
+  .roman-panel {
+    @apply relative rounded-lg border-2 border-gold bg-obsidian/95
+           shadow-[inset_0_0_0_1px_rgba(15,15,23,0.9)];
+  }
+
+  .roman-banner {
+    @apply relative font-display font-bold uppercase tracking-banner text-white
+           bg-gradient-to-r from-crimson-deep via-crimson to-crimson-deep
+           px-8 py-2 border border-gold;
+    clip-path: polygon(
+      14px 0,
+      calc(100% - 14px) 0,
+      100% 50%,
+      calc(100% - 14px) 100%,
+      14px 100%,
+      0 50%
+    );
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6), 0 0 6px rgba(212, 175, 55, 0.35);
+  }
+}
